@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clickworthy Archive</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --primary: #bb86fc;
+            --secondary: #03dac6;
+            --warning: #cf6679;
+            --text-main: #ffffff;
+            --text-muted: #a0a0a0;
+            --border: #333333;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 15px;
+            overscroll-behavior-y: contain; 
+        }
+        .container { max-width: 600px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 20px; }
+        header h1 { color: var(--primary); margin-bottom: 5px; font-size: 24px; }
+        .form-section, .search-section {
+            background-color: var(--card-bg);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border);
+        }
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } /* For side-by-side inputs */
+        input, button {
+            padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+            background-color: var(--bg-color); color: var(--text-main);
+            font-size: 16px; width: 100%; box-sizing: border-box;
+        }
+        input:focus { outline: none; border-color: var(--primary); }
+        button { background-color: var(--primary); color: #000; font-weight: bold; cursor: pointer; border: none; margin-top: 5px; }
+        button:active { opacity: 0.8; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .export-btn { background-color: var(--secondary); font-size: 14px; }
+        .backup-btn { background-color: #ffb74d; font-size: 14px; }
+        .restore-btn { background-color: var(--bg-color); color: var(--text-main); border: 1px solid var(--text-muted); font-size: 14px; }
+        .archive-list { display: grid; gap: 10px; padding-bottom: 40px; }
+        .card { background-color: var(--card-bg); padding: 15px; border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        .card-title { font-size: 16px; font-weight: bold; color: var(--primary); }
+        .card-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; margin-left: 10px; }
+        .card-details span { display: block; font-size: 13px; margin-bottom: 2px; line-height: 1.4; }
+        .delete-btn { background-color: var(--warning); padding: 8px; font-size: 13px; margin-top: 8px; width: 100%; }
+        #fileInput { display: none; }
+        .optional-label { font-size: 12px; color: var(--text-muted); margin-bottom: -5px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Clickworthy By DTC</h1>
+        <p style="color: var(--text-muted); font-size: 14px; margin:0;">Backup Archive</p>
+    </header>
+
+    <div class="form-section">
+        <form id="backupForm" class="form-grid">
+            <input type="text" id="shootName" placeholder="Shoot Name (e.g., Product Shoot)" required>
+            <input type="date" id="shootDate" required>
+            
+            <div class="form-row">
+                <input type="text" id="photographerName" placeholder="Photographer (e.g., Divya)">
+                <input type="text" id="cameraName" placeholder="Camera (e.g., Nikon D5600)">
+            </div>
+
+            <input type="text" id="fileQuantity" placeholder="Quantity (e.g., 350 RAWs)">
+            <input type="text" id="fileNames" placeholder="File Names (e.g., DSC_001-350)">
+            
+            <p class="optional-label">Mandatory Backup Locations:</p>
+            <input type="text" id="location1" placeholder="Drive 1 (e.g., Laptop SSD)" required>
+            <input type="text" id="location2" placeholder="Drive 2 (e.g., External HDD 1)" required>
+            <input type="text" id="location3" placeholder="Drive 3 (e.g., Google Drive)" required>
+            
+            <button type="submit">Add to Archive</button>
+        </form>
+    </div>
+
+    <div class="search-section">
+        <input type="text" id="searchInput" placeholder="🔍 Search shoots, names, or drives...">
+        <div class="btn-grid">
+            <button type="button" id="exportBtn" class="export-btn">📊 Save as Excel</button>
+            <button type="button" id="backupBtn" class="backup-btn">💾 Backup App (.json)</button>
+        </div>
+        <button type="button" id="restoreTrigger" class="restore-btn" style="width: 100%; margin-top: 10px;">📂 Restore from Backup File</button>
+        <input type="file" id="fileInput" accept=".json">
+    </div>
+
+    <div class="archive-list" id="archiveList"></div>
+</div>
+
+<script>
+    let backups = JSON.parse(localStorage.getItem('clickworthyBackups')) || [];
+
+    const form = document.getElementById('backupForm');
+    const archiveList = document.getElementById('archiveList');
+    const searchInput = document.getElementById('searchInput');
+
+    function saveToLocalStorage() {
+        localStorage.setItem('clickworthyBackups', JSON.stringify(backups));
+    }
+
+    function renderCards(filterText = '') {
+        archiveList.innerHTML = '';
+        const filteredBackups = backups.filter(b => 
+            b.name.toLowerCase().includes(filterText.toLowerCase()) || 
+            b.loc1.toLowerCase().includes(filterText.toLowerCase()) ||
+            b.loc2.toLowerCase().includes(filterText.toLowerCase()) ||
+            b.loc3.toLowerCase().includes(filterText.toLowerCase()) ||
+            (b.photographer && b.photographer.toLowerCase().includes(filterText.toLowerCase())) ||
+            (b.camera && b.camera.toLowerCase().includes(filterText.toLowerCase()))
+        );
+
+        filteredBackups.reverse().forEach(backup => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            // Handle optional fields for display
+            const photoDisplay = backup.photographer ? backup.photographer : 'N/A';
+            const camDisplay = backup.camera ? backup.camera : 'N/A';
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="card-title">${backup.name}</div>
+                    <div class="card-date">${backup.date}</div>
+                </div>
+                <div class="card-details">
+                    <span><strong>📸 Shot by:</strong> ${photoDisplay} | <strong>📷 Gear:</strong> ${camDisplay}</span>
+                    <span><strong>Files:</strong> ${backup.quantity} | <strong>Seq:</strong> ${backup.fileNames}</span>
+                    <span style="color: #03dac6; margin-top: 4px;"><strong>📍 Drive 1:</strong> ${backup.loc1}</span>
+                    <span style="color: #03dac6;"><strong>💾 Drive 2:</strong> ${backup.loc2}</span>
+                    <span style="color: #03dac6;"><strong>☁️ Drive 3:</strong> ${backup.loc3}</span>
+                </div>
+                <button class="delete-btn" onclick="deleteBackup(${backup.id})">Delete Record</button>
+            `;
+            archiveList.appendChild(card);
+        });
+    }
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const newBackup = {
+            id: Date.now(),
+            name: document.getElementById('shootName').value,
+            date: document.getElementById('shootDate').value,
+            photographer: document.getElementById('photographerName').value,
+            camera: document.getElementById('cameraName').value,
+            quantity: document.getElementById('fileQuantity').value,
+            fileNames: document.getElementById('fileNames').value,
+            loc1: document.getElementById('location1').value,
+            loc2: document.getElementById('location2').value,
+            loc3: document.getElementById('location3').value
+        };
+        backups.push(newBackup);
+        saveToLocalStorage();
+        renderCards();
+        form.reset();
+    });
+
+    function deleteBackup(id) {
+        if(confirm('Delete this record?')) {
+            backups = backups.filter(b => b.id !== id);
+            saveToLocalStorage();
+            renderCards();
+        }
+    }
+
+    searchInput.addEventListener('input', (e) => renderCards(e.target.value));
+
+    // Export to Excel (CSV)
+    document.getElementById('exportBtn').addEventListener('click', function() {
+        if (backups.length === 0) return alert("No data to export!");
+        let csvContent = "data:text/csv;charset=utf-8,Shoot Name,Date,Photographer,Camera,Quantity,File Names,Drive 1,Drive 2,Drive 3\n";
+        backups.forEach(row => {
+            const safePhoto = row.photographer || '';
+            const safeCam = row.camera || '';
+            csvContent += `"${row.name}","${row.date}","${safePhoto}","${safeCam}","${row.quantity}","${row.fileNames}","${row.loc1}","${row.loc2}","${row.loc3}"\n`;
+        });
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", "Clickworthy_Archive.csv");
+        link.click();
+    });
+
+    // Full App Backup (JSON file)
+    document.getElementById('backupBtn').addEventListener('click', function() {
+        if (backups.length === 0) return alert("Database is empty!");
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backups));
+        const link = document.createElement("a");
+        link.setAttribute("href", dataStr);
+        link.setAttribute("download", "Clickworthy_Database_Backup.json");
+        link.click();
+    });
+
+    // Restore App from Backup
+    document.getElementById('restoreTrigger').addEventListener('click', () => document.getElementById('fileInput').click());
+    
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if(Array.isArray(importedData)) {
+                    backups = importedData;
+                    saveToLocalStorage();
+                    renderCards();
+                    alert("Database successfully restored!");
+                } else {
+                    alert("Invalid backup file.");
+                }
+            } catch (err) {
+                alert("Error reading file. Make sure it's a valid .json backup.");
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    renderCards();
+</script>
+
+</body>
+</html>
