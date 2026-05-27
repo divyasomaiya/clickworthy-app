@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./backend/faces.index:/app/faces.index
+      - ~/.insightface:/root/.insightface
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service_account.json
+      - FIREBASE_CREDENTIALS=/app/firebase_credentials.json
+      - DRIVE_ROOT_FOLDER_ID=your_google_drive_folder_id
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
