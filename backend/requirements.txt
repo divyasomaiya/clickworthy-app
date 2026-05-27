@@ -1,0 +1,18 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+google-api-python-client==2.108.0
+google-auth-httplib2==0.1.1
+google-auth-oauthlib==1.1.0
+firebase-admin==6.2.0
+python-multipart==0.0.6
+# insightface==0.7.3 (optional, falls back to offline mock face service if not installed)
+onnxruntime==1.16.1
+opencv-python-headless==4.8.1.78
+faiss-cpu==1.7.4
+numpy==1.26.2
+Pillow==10.1.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+aiofiles==23.2.1

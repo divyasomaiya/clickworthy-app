@@ -1,0 +1,22 @@
+# Credentials
+*credentials.json
+*service_account.json
+*.env
+*.env.local
+backend/.env
+frontend/.env.local
+
+# Next.js
+frontend/.next/
+frontend/node_modules/
+
+# Python
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/*/__pycache__/
+backend/faces.index
+backend/faces_map.json
+backend/temp_uploads/
+backend/app/faces.index
+backend/app/faces_map.json
+.insightface/
