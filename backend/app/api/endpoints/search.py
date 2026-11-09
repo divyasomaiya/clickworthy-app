@@ -12,11 +12,45 @@ import uuid
 from app.core.auth import get_current_user
 from fastapi import Depends, HTTPException
 
+from fastapi import Query
+from typing import Optional
+from fastapi.security import HTTPAuthorizationCredentials
+from datetime import datetime
+
 @router.post("/")
 async def search_faces(
     event_id: str = Form(...),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    token: Optional[str] = Form(None)
 ):
+    db = firebase_service.get_db()
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not connected")
+
+    event_doc = db.collection("events").document(event_id).get()
+    if not event_doc.exists:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    event_data = event_doc.to_dict()
+
+    # Event authorization and expiry check
+    expiry = event_data.get("expiry_date")
+    if expiry and datetime.fromisoformat(expiry) < datetime.now():
+        raise HTTPException(status_code=403, detail="Event has expired")
+
+    is_private = event_data.get("is_private", True)
+    if is_private:
+        if not token:
+            raise HTTPException(status_code=403, detail="Unauthenticated access to private event search is forbidden.")
+        try:
+            creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+            current_user = await get_current_user(creds)
+        except Exception:
+            raise HTTPException(status_code=403, detail="Invalid token")
+
+        if event_data.get("photographer_id") != current_user.get("uid"):
+            raise HTTPException(status_code=403, detail="Not authorized to search this private event.")
+
     temp_dir = "temp_search"
     os.makedirs(temp_dir, exist_ok=True)
     temp_path = os.path.join(temp_dir, f"{uuid.uuid4()}.tmp")

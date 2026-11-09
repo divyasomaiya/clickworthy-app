@@ -162,6 +162,15 @@ def test_search_returns_placeholder():
     token = get_test_token()
     headers = {"Authorization": f"Bearer {token}"}
 
+    # Create an event first so event_id lookup succeeds
+    response = client.post("/api/events/", json={
+        "name": "Test Event",
+        "client_name": "Test Client",
+        "date": "2026-05-27",
+        "is_private": True
+    }, headers=headers)
+    event_id = response.json()["event_id"]
+
     import io
     from PIL import Image
     file_bytes = io.BytesIO()
@@ -170,7 +179,7 @@ def test_search_returns_placeholder():
     file_bytes.seek(0)
 
     # Search should return 200 but matches empty list since it's just an empty image
-    res = client.post("/api/search/", data={"event_id": "test"}, files={"file": ("test.jpg", file_bytes.read(), "image/jpeg")}, headers=headers)
+    res = client.post("/api/search/", data={"event_id": event_id, "token": token}, files={"file": ("test.jpg", file_bytes.read(), "image/jpeg")})
     assert res.status_code == 200
     assert "No face found in selfie" in res.json()["message"]
 
