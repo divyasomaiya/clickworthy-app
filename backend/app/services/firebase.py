@@ -46,9 +46,10 @@ class LocalMockDB:
                     def update(self, data: dict):
                         if self.did not in self.coll.db.data[self.coll.name]:
                             raise Exception("Cannot update non-existent document")
-                        # Handle firestore.DELETE_FIELD (mocked as string for local tests)
+
+                        from firebase_admin import firestore
                         for k, v in data.items():
-                            if v == "DELETE_FIELD":
+                            if v == firestore.DELETE_FIELD:
                                 self.coll.db.data[self.coll.name][self.did].pop(k, None)
                             else:
                                 self.coll.db.data[self.coll.name][self.did][k] = v

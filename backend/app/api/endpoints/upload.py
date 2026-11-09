@@ -104,11 +104,7 @@ async def upload_photos(
             "filename": file.filename
         })
 
-    # Trigger background AI processing disabled until real model is integrated
-    # background_tasks.add_task(process_and_index_image, temp_path, event_id, photo_id)
-
-    # Cleanup temp path here since background task is disabled
-    if os.path.exists(temp_path):
-        os.remove(temp_path)
+    # Trigger background AI processing
+    background_tasks.add_task(process_and_index_image, temp_path, event_id, photo_id)
 
     return {"message": "Upload started", "photo_id": photo_id, "drive_file_id": drive_file_id}

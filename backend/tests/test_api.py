@@ -163,12 +163,16 @@ def test_search_returns_placeholder():
     headers = {"Authorization": f"Bearer {token}"}
 
     import io
-    file_bytes = io.BytesIO(b"fake data")
+    from PIL import Image
+    file_bytes = io.BytesIO()
+    image = Image.new('RGB', (100, 100))
+    image.save(file_bytes, format='JPEG')
+    file_bytes.seek(0)
 
-    # Search should return 200 but matches empty list with disabled msg
-    res = client.post("/api/search/", data={"event_id": "test"}, files={"file": ("test.jpg", file_bytes, "image/jpeg")}, headers=headers)
+    # Search should return 200 but matches empty list since it's just an empty image
+    res = client.post("/api/search/", data={"event_id": "test"}, files={"file": ("test.jpg", file_bytes.read(), "image/jpeg")}, headers=headers)
     assert res.status_code == 200
-    assert "AI matching is disabled" in res.json()["message"]
+    assert "No face found in selfie" in res.json()["message"]
 
 @patch("app.api.endpoints.gdrive.google_auth_oauthlib.flow.Flow")
 def test_gdrive_auth_route(mock_flow):
@@ -195,6 +199,11 @@ def test_gdrive_auth_route(mock_flow):
 
 @patch("app.api.endpoints.gdrive.httpx.post")
 def test_gdrive_disconnect(mock_post):
+    import base64
+    os.environ["ENCRYPTION_KEY"] = base64.urlsafe_b64encode(b"0" * 32).decode()
+    from app.core.config import settings
+    settings.ENCRYPTION_KEY = os.environ["ENCRYPTION_KEY"]
+
     token = get_test_token()
     headers = {"Authorization": f"Bearer {token}"}
 

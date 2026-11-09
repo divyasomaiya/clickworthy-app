@@ -25,16 +25,13 @@ The platform is designed around 4 distinct roles:
 - **Privacy Controls**: Events default to private. Expiry checks are enforced on image retrieval.
 - **Safe Development**: Mock authentication bypasses have been removed. The local database fallback securely persists state without tracking in version control.
 
-## 5. Pending Work & Next Steps (Milestones 3+)
-**COMPLETED: Milestone 2 (Google Drive BYOS)**
-- Implemented `GoogleDriveProvider` extending the generic `StorageProvider`.
-- Setup `/api/gdrive` OAuth routes allowing independent photographer authorization retaining token details encryptedly via `Fernet`.
-- Cleaned unused mock features optimizing UI retrieval flows without leaking entire image responses to memory leveraging strictly temporary `objectUrl` streams natively.
+## 5. Pending Work & Next Steps (Milestones 4+)
+**COMPLETED: Milestone 3 (OpenCV AI)**
+- Switched out InsightFace to OpenCV YuNet (detection) and SFace (recognition).
+- Allowed the OpenCV integration correctly indexing FAISS elements inside background uploads cleanly handling multiple groups per image mapping embeddings.
+- Filtered FAISS matches by L2 thresholds mapping strictly backwards connecting cleanly back to the image ID appropriately matching threshold configurations effectively processing natively.
 
-**PROPOSAL: Milestone 3**
-- **AI Face Recognition Roadmap**: Focus heavily on finalizing InsightFace model licensing resolution securely natively re-integrating proper FAISS indexing flows mapping group-photo consent configurations properly bypassing currently restricted components natively.
-
-**Subsequent Milestones**
+**PROPOSAL: Milestone 4**
 - **Universal Discovery**: Implement consent-based universal photo discovery across multiple events for eligible users.
 - **Guest Authentication**: Implement secure JWT/magic links for guests so private galleries can be safely accessed without relying solely on open links.
 - **Advanced Features**: Albums, Lightroom integration, WhatsApp bot, camera-to-cloud workflows, and subscriptions/billing.

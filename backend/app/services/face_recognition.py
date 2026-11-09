@@ -2,68 +2,71 @@ import os
 import cv2
 import numpy as np
 
-try:
-    import insightface
-    from insightface.app import FaceAnalysis
-    HAS_INSIGHTFACE = True
-except ImportError:
-    HAS_INSIGHTFACE = False
-
 class FaceRecognitionService:
     def __init__(self):
-        self.mock_mode = not HAS_INSIGHTFACE
-        if not self.mock_mode:
-            try:
-                # We initialize the model. In production, 'buffalo_l' should be pre-downloaded.
-                self.app = FaceAnalysis(name='buffalo_l', root='~/.insightface/models')
-                # Setting ctx_id=0 enables GPU if available, else ctx_id=-1 for CPU
-                self.app.prepare(ctx_id=-1, det_size=(640, 640))
-            except Exception as e:
-                print(f"Error initializing InsightFace: {e}. Falling back to mock mode.")
-                self.mock_mode = True
+        # Paths to the downloaded ONNX models
+        yunet_path = os.path.join(os.path.dirname(__file__), '../../models/face_detection_yunet_2023mar.onnx')
+        sface_path = os.path.join(os.path.dirname(__file__), '../../models/face_recognition_sface_2021dec.onnx')
 
-        if self.mock_mode:
-            print("Running FaceRecognitionService in Mock Mode (No C++ compiler/InsightFace required)")
+        self.available = os.path.exists(yunet_path) and os.path.exists(sface_path)
+
+        if self.available:
+            self.detector = cv2.FaceDetectorYN.create(
+                model=yunet_path,
+                config="",
+                input_size=(320, 320),
+                score_threshold=0.8,
+                nms_threshold=0.3,
+                top_k=5000
+            )
+            self.recognizer = cv2.FaceRecognizerSF.create(
+                model=sface_path,
+                config=""
+            )
+        else:
+            print(f"Warning: ONNX models not found. FaceRecognitionService is disabled. Paths expected: {yunet_path}")
 
     def process_image(self, file_path: str):
         """Processes an image, detecting faces and generating embeddings."""
-        if self.mock_mode:
-            if not os.path.exists(file_path):
-                raise ValueError("Could not read image file.")
+        if not self.available:
+            return []
 
-            # Generate a reproducible embedding based on the filename/size hash
-            import hashlib
-            basename = os.path.basename(file_path)
-            file_hash = hashlib.md5(basename.encode('utf-8')).hexdigest()
-            # Seed numpy random generator with the hash
-            seed = int(file_hash, 16) % (2**32)
-            rng = np.random.default_rng(seed)
-
-            # Generate a random 512-dimensional vector normalized to unit length
-            embedding = rng.standard_normal(512)
-            embedding = embedding / np.linalg.norm(embedding)
-
-            return [{
-                "bbox": [50.0, 50.0, 200.0, 200.0],
-                "kps": [[75.0, 100.0], [125.0, 100.0], [100.0, 125.0], [80.0, 150.0], [120.0, 150.0]],
-                "det_score": 0.99,
-                "embedding": embedding.tolist()
-            }]
+        if not os.path.exists(file_path):
+            raise ValueError("Could not read image file.")
 
         img = cv2.imread(file_path)
         if img is None:
             raise ValueError("Could not read image file.")
 
-        faces = self.app.get(img)
+        # OpenCV YuNet requires input size matching the image size for detection
+        height, width, _ = img.shape
+        self.detector.setInputSize((width, height))
+
+        _, faces = self.detector.detect(img)
 
         results = []
-        for face in faces:
-            results.append({
-                "bbox": face.bbox.tolist(),
-                "kps": face.kps.tolist(),
-                "det_score": float(face.det_score),
-                "embedding": face.embedding.tolist()
-            })
+        if faces is not None:
+            for face in faces:
+                # face format: [x, y, w, h, x_re, y_re, x_le, y_le, x_nt, y_nt, x_rcm, y_rcm, x_lcm, y_lcm, score]
+                bbox = face[0:4].tolist()
+                score = float(face[-1])
+
+                # Align the face using the recognizer
+                aligned_face = self.recognizer.alignCrop(img, face)
+
+                # Extract features
+                embedding = self.recognizer.feature(aligned_face)
+
+                # SFace embeddings are typically 128-dimensional. Let's normalize it.
+                embedding = embedding[0] # remove batch dim
+                embedding = embedding / np.linalg.norm(embedding)
+
+                results.append({
+                    "bbox": bbox,
+                    "kps": face[4:14].reshape(5, 2).tolist(), # 5 landmarks
+                    "det_score": score,
+                    "embedding": embedding.tolist()
+                })
 
         return results
 

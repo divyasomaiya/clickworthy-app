@@ -15,10 +15,8 @@ from fastapi import Depends, HTTPException
 @router.post("/")
 async def search_faces(
     event_id: str = Form(...),
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
+    file: UploadFile = File(...)
 ):
-    # Fix path traversal vulnerability
     temp_dir = "temp_search"
     os.makedirs(temp_dir, exist_ok=True)
     temp_path = os.path.join(temp_dir, f"{uuid.uuid4()}.tmp")
@@ -26,26 +24,23 @@ async def search_faces(
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Note: For PR 1 we bypass fake AI search. We just return all images for the event for testing.
-    # In a real app we'd get embeddings and search FAISS.
-
-    os.remove(temp_path)
-
-    db = firebase_service.get_db()
-    if not db:
-        return {"matches": [], "message": "Database not connected"}
-
-    # Return placeholder as AI is disabled for PR 1. Do not leak photos.
-    return {"matches": [], "message": "AI matching is disabled pending model integration."}
+    # Get embedding for the uploaded selfie using OpenCV YuNet + SFace
+    try:
+        faces = face_service.process_image(temp_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
     if not faces:
         return {"matches": [], "message": "No face found in selfie"}
 
-    # Assuming one face in selfie, use the first one with highest confidence
+    # Use the highest confidence face if multiple exist
+    # sort by det_score descending
+    faces = sorted(faces, key=lambda x: x["det_score"], reverse=True)
     query_embedding = faces[0]["embedding"]
 
-    # Search vector store
-    results = faiss_index.search(query_embedding, k=10)
+    # Search vector store for nearest neighbors
+    results = faiss_index.search(query_embedding, k=100)
 
     # Filter matches by event_id and distance threshold
     db = firebase_service.get_db()
@@ -54,8 +49,10 @@ async def search_faces(
 
     if db:
         for res in results:
-            # lower distance is better in L2
-            if res["distance"] > 1.2: # Tunable threshold
+            # Tunable threshold. For SFace cosine distance equivalent, we want matches close to each other.
+            # We normalized earlier, L2 squared dist on unit vectors = 2 - 2*cosine_sim.
+            # A threshold of 1.0 means cosine sim of 0.5. Let's use 1.0 for now.
+            if res["distance"] > 1.0:
                 continue
 
             face_doc = db.collection("faces").document(res["face_id"]).get()
@@ -75,20 +72,5 @@ async def search_faces(
                                 "drive_file_id": photo_data.get("drive_file_id"),
                                 "distance": res["distance"]
                             })
-    else:
-        # Fallback for offline testing when Firebase is not configured
-        for res in results:
-            if res["distance"] > 1.2:
-                continue
-            face_id = res["face_id"]
-            if "_face_" in face_id:
-                photo_id = face_id.split("_face_")[0]
-                if photo_id not in seen_photos:
-                    seen_photos.add(photo_id)
-                    matched_photos.append({
-                        "photo_id": photo_id,
-                        "drive_file_id": "mock_drive_file_id",
-                        "distance": res["distance"]
-                    })
 
     return {"matches": matched_photos}

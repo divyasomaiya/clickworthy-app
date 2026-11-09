@@ -19,10 +19,7 @@ from datetime import datetime, timedelta
 def get_fernet():
     key = settings.ENCRYPTION_KEY
     if not key:
-        if os.environ.get("ENVIRONMENT") == "production":
-            raise Exception("ENCRYPTION_KEY is required in production.")
-        # Only for local dev tests without keys
-        key = base64.urlsafe_b64encode(b"0" * 32).decode()
+        raise Exception("ENCRYPTION_KEY is required.")
     return Fernet(key)
 
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -90,18 +87,25 @@ def gdrive_callback(request: Request, state: str, code: str):
         decoded_state = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
         uid = decoded_state.get("uid")
         secure_state = decoded_state.get("state")
-        exp = datetime.fromisoformat(decoded_state.get("exp"))
-
-        if datetime.now() > exp:
-            raise Exception("State expired")
 
         db = firebase_service.get_db()
-        if db:
-            state_doc = db.collection("oauth_states").document(secure_state).get()
-            if not state_doc.exists or state_doc.to_dict().get("uid") != uid:
-                raise Exception("State tampered or reused")
-            # Delete state to prevent replay
-            db.collection("oauth_states").document(secure_state).delete()
+        if not db:
+            raise HTTPException(status_code=500, detail="Database not available")
+
+        state_doc = db.collection("oauth_states").document(secure_state).get()
+        if not state_doc.exists:
+            raise Exception("State not found or already consumed")
+
+        state_data = state_doc.to_dict()
+        # Immediately delete state to prevent replay attacks
+        db.collection("oauth_states").document(secure_state).delete()
+
+        if state_data.get("uid") != uid:
+            raise Exception("State tampered")
+
+        exp = datetime.fromisoformat(state_data.get("exp"))
+        if datetime.now() > exp:
+            raise Exception("State expired")
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid state parameter: {e}")
@@ -183,9 +187,10 @@ def gdrive_disconnect(current_user: dict = Depends(get_current_user)):
             except Exception as e:
                 print(f"Failed to revoke token externally: {e}")
 
+        from firebase_admin import firestore
         # Remove token data locally
         db.collection("photographers").document(uid).update({
-            "gdrive_token": "DELETE_FIELD",
+            "gdrive_token": firestore.DELETE_FIELD,
             "gdrive_connected": False
         })
 
