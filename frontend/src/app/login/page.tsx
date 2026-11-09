@@ -13,13 +13,8 @@ export default function LoginPage() {
   const handleLogin = async () => {
     setLoading(true);
     try {
-      let idToken = "mock-token";
-      try {
-        const result = await signInWithPopup(auth, googleProvider);
-        idToken = await result.user.getIdToken();
-      } catch (fbError) {
-        console.warn("Firebase sign-in skipped or failed. Using mock-token for local testing:", fbError);
-      }
+      const result = await signInWithPopup(auth, googleProvider);
+      const idToken = await result.user.getIdToken();
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const res = await fetch(`${apiUrl}/api/auth/login`, {

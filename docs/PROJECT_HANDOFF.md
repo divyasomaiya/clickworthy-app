@@ -20,12 +20,16 @@ The platform is designed around 4 distinct roles:
 
 ## 4. Verified Functionality (Milestone 1)
 - **Local Storage Provider**: File uploads correctly store data locally and prevent Path Traversal vulnerabilities via UUID generation. File sizes and actual image contents (via Pillow) are validated.
-- **Event Ownership**: Secure JWT verification (via Firebase ID tokens) ensures photographers can only list, view, and upload to events they own.
-- **Real Previews**: The frontend gallery `/gallery/[id]` retrieves actual images via a proxy route (`GET /api/images/{photo_id}`).
+- **Event Ownership**: Secure JWT verification (via Firebase ID tokens) ensures photographers can only list, view, and upload to events they own. Empty JWT secrets fail safely.
+- **Real Previews**: The frontend gallery `/gallery/[id]` retrieves actual images via a proxy route (`GET /api/images/{photo_id}`). Guest auth tokens are properly verified before retrieving images from private events.
 - **Privacy Controls**: Events default to private. Expiry checks are enforced on image retrieval.
-- **Safe Development**: Mock authentication bypasses have been removed.
+- **Safe Development**: Mock authentication bypasses have been removed. The local database fallback securely persists state without tracking in version control.
 
 ## 5. Pending Work & Next Steps (Milestones 2+)
+**PROPOSAL: Milestone 2**
+- Focus on Google Drive BYOS (Bring Your Own Storage). Instead of local storage or a single service account, transition to per-photographer Google OAuth 2.0. Photographers should authenticate and store event photos in their *own* Google Drive quotas.
+
+**Subsequent Milestones**
 - **Google Drive BYOS (Bring Your Own Storage)**: Transition from a central service account to per-photographer Google OAuth 2.0. Photographers should authenticate and store event photos in their *own* Google Drive quotas.
 - **AI Face Recognition Roadmap**: Resolve InsightFace model licensing issues. Re-integrate proper FAISS indexing, filtering, and group-photo consent limits. Do not present fake matches as real results.
 - **Universal Discovery**: Implement consent-based universal photo discovery across multiple events for eligible users.

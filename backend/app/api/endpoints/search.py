@@ -35,26 +35,8 @@ async def search_faces(
     if not db:
         return {"matches": [], "message": "Database not connected"}
 
-    event = db.collection("events").document(event_id).get()
-    if not event.exists:
-        raise HTTPException(status_code=404, detail="Event not found")
-
-    if event.to_dict().get("photographer_id") != current_user.get("uid"):
-        raise HTTPException(status_code=403, detail="Only the photographer can list all photos via the temporary search stub.")
-
-    # Return all images for the event (disabling fake AI for PR 1)
-    images_ref = db.collection("images").where("event_id", "==", event_id).get()
-
-    matched_photos = []
-    for doc in images_ref:
-        data = doc.to_dict()
-        matched_photos.append({
-            "photo_id": doc.id,
-            "drive_file_id": data.get("drive_file_id"),
-            "distance": 0.0
-        })
-
-    return {"matches": matched_photos}
+    # Return placeholder as AI is disabled for PR 1. Do not leak photos.
+    return {"matches": [], "message": "AI matching is disabled pending model integration."}
 
     if not faces:
         return {"matches": [], "message": "No face found in selfie"}

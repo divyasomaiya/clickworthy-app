@@ -17,7 +17,6 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("event_id", params.id);
-      formData.append("folder_id", "mock-folder-id"); // In real app, fetch from event details
 
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";

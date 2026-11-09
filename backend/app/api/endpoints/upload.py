@@ -45,10 +45,10 @@ def process_and_index_image(file_path: str, event_id: str, photo_id: str):
 async def upload_photos(
     background_tasks: BackgroundTasks,
     event_id: str = Form(...),
-    folder_id: str = Form(...),
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
+    folder_id = f"local_folder_{event_id}" # Logical reference for local storage
     # Check authorization for the event
     db = firebase_service.get_db()
     if db:
@@ -96,8 +96,11 @@ async def upload_photos(
             "filename": file.filename
         })
 
-    # Trigger background AI processing
-    # Note: fake AI should ideally be removed, but for now we'll pass the temp_path
-    background_tasks.add_task(process_and_index_image, temp_path, event_id, photo_id)
+    # Trigger background AI processing disabled until real model is integrated
+    # background_tasks.add_task(process_and_index_image, temp_path, event_id, photo_id)
+
+    # Cleanup temp path here since background task is disabled
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
 
     return {"message": "Upload started", "photo_id": photo_id, "drive_file_id": drive_file_id}

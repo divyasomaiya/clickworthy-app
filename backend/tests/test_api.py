@@ -1,7 +1,10 @@
+import os
 import pytest
+# Set JWT secret before app imports
+os.environ["JWT_SECRET_KEY"] = "test_secret_key"
+
 from fastapi.testclient import TestClient
 from app.main import app
-import os
 import shutil
 import json
 from unittest.mock import patch
@@ -90,3 +93,79 @@ def test_upload_invalid_file_type():
         headers=headers
     )
     assert res.status_code == 400
+
+def test_private_image_retrieval_unauthorized():
+    token = get_test_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create private event
+    response = client.post("/api/events/", json={
+        "name": "Test Event",
+        "client_name": "Test Client",
+        "date": "2026-05-27",
+        "is_private": True
+    }, headers=headers)
+    event_id = response.json()["event_id"]
+
+    # Upload mock valid image
+    from PIL import Image
+    import io
+    file_bytes = io.BytesIO()
+    image = Image.new('RGB', (100, 100))
+    image.save(file_bytes, format='JPEG')
+    file_bytes.seek(0)
+
+    upload_res = client.post(
+        "/api/upload/",
+        data={"event_id": event_id},
+        files={"file": ("test.jpg", file_bytes.read(), "image/jpeg")},
+        headers=headers
+    )
+    assert upload_res.status_code == 200
+    photo_id = upload_res.json()["photo_id"]
+
+    # Attempt to retrieve without token (should fail 403)
+    get_res = client.get(f"/api/images/{photo_id}")
+    assert get_res.status_code == 403
+
+    # Attempt to retrieve with other user's token (should fail 403)
+    other_token = get_test_token("other-uid")
+    get_other = client.get(f"/api/images/{photo_id}?token={other_token}")
+    assert get_other.status_code == 403
+
+    # Attempt to retrieve with owner's token (should succeed 200)
+    get_owner = client.get(f"/api/images/{photo_id}?token={token}")
+    assert get_owner.status_code == 200
+
+def test_get_event_photos_tenant_isolation():
+    token = get_test_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create event
+    response = client.post("/api/events/", json={
+        "name": "Test Event",
+        "client_name": "Test Client",
+        "date": "2026-05-27"
+    }, headers=headers)
+    event_id = response.json()["event_id"]
+
+    # Try fetching as owner (should succeed 200)
+    res_owner = client.get(f"/api/events/{event_id}/photos", headers=headers)
+    assert res_owner.status_code == 200
+
+    # Try fetching as non-owner (should fail 403)
+    other_token = get_test_token("other")
+    res_other = client.get(f"/api/events/{event_id}/photos", headers={"Authorization": f"Bearer {other_token}"})
+    assert res_other.status_code == 403
+
+def test_search_returns_placeholder():
+    token = get_test_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    import io
+    file_bytes = io.BytesIO(b"fake data")
+
+    # Search should return 200 but matches empty list with disabled msg
+    res = client.post("/api/search/", data={"event_id": "test"}, files={"file": ("test.jpg", file_bytes, "image/jpeg")}, headers=headers)
+    assert res.status_code == 200
+    assert "AI matching is disabled" in res.json()["message"]

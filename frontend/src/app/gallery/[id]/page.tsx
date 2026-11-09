@@ -5,65 +5,56 @@ import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
 import Image from "next/image";
 
+import { useEffect } from "react";
+
 export default function ClientGallery({ params }: { params: { id: string } }) {
-  const [isSearching, setIsSearching] = useState(false);
   const [matches, setMatches] = useState<any[]>([]);
-  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const handleSelfieUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.[0]) return;
+  useEffect(() => {
+    const fetchPhotos = async () => {
+      try {
+        const token = localStorage.getItem("access_token");
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const headers: any = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
 
-    setIsSearching(true);
-    const formData = new FormData();
-    formData.append("file", e.target.files[0]);
-    formData.append("event_id", params.id);
+        // Use the new owner listing endpoint
+        const res = await fetch(`${apiUrl}/api/events/${params.id}/photos`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setMatches(data);
+        } else {
+          setError("Not authorized to view this gallery, or event expired.");
+        }
+      } catch (err) {
+        setError("Failed to fetch gallery.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${apiUrl}/api/search/`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      setMatches(data.matches || []);
-      setSearched(true);
-    } catch (error) {
-      console.error("Failed to search faces", error);
-    } finally {
-      setIsSearching(false);
-    }
-  };
+    fetchPhotos();
+  }, [params.id]);
+
+  if (loading) return <div className="p-8 text-center">Loading gallery...</div>;
+  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">Find Your Photos</h1>
+          <h1 className="text-4xl font-bold mb-4">Event Gallery</h1>
           <p className="text-slate-500 mb-8 max-w-xl mx-auto">
-            Upload a quick selfie and our AI will instantly find all your pictures from this event.
+            (AI Selfie Search is currently disabled for development. Showing all photos.)
           </p>
-
-          <input
-            type="file"
-            accept="image/*"
-            capture="user"
-            className="hidden"
-            id="selfie-upload"
-            onChange={handleSelfieUpload}
-          />
-          <label htmlFor="selfie-upload">
-            <Button size="lg" className="rounded-full shadow-xl" asChild disabled={isSearching}>
-              <span className="flex items-center gap-2 px-8">
-                <Camera className="w-5 h-5" />
-                {isSearching ? "Scanning Event..." : "Take a Selfie"}
-              </span>
-            </Button>
-          </label>
         </div>
 
-        {searched && (
-          <div>
-            <h2 className="text-2xl font-semibold mb-6">Your Photos ({matches.length})</h2>
+        <div>
+            <h2 className="text-2xl font-semibold mb-6">All Photos ({matches.length})</h2>
             {matches.length === 0 ? (
               <div className="text-center text-slate-500 py-12">
                 No photos found matching your selfie.
@@ -71,8 +62,9 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
             ) : (
               <div className="columns-1 sm:columns-2 md:columns-3 gap-4 space-y-4">
                 {matches.map((match, i) => {
+                  const token = localStorage.getItem("access_token");
                   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                  const imageUrl = `${apiUrl}/api/images/${match.photo_id}`;
+                  const imageUrl = `${apiUrl}/api/images/${match.photo_id}${token ? `?token=${token}` : ""}`;
                   return (
                     <div key={i} className="break-inside-avoid rounded-lg overflow-hidden relative group">
                       <div className="relative">
@@ -94,7 +86,6 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
               </div>
             )}
           </div>
-        )}
       </div>
     </div>
   );

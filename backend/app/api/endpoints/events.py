@@ -23,11 +23,9 @@ def create_event(event: EventCreate, current_user: dict = Depends(get_current_us
     if not photographer_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Setup google drive folders (or local storage abstraction in next step)
-    folder_name = f"{event.date}_{event.client_name}_{event.name}"
-    folders = drive_service.setup_event_folders(folder_name)
-
     event_id = str(uuid.uuid4())
+    # Omit Drive folder specifics for local storage. We will use a logical reference.
+    folders = {"event_folder_id": f"local_folder_{event_id}"}
 
     # Store event metadata in Firestore
     db = firebase_service.get_db()
@@ -80,3 +78,31 @@ def get_event(event_id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Not authorized to view this event")
 
     return {"id": event.id, **event_data}
+
+@router.get("/{event_id}/photos")
+def get_event_photos(event_id: str, current_user: dict = Depends(get_current_user)):
+    db = firebase_service.get_db()
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not connected")
+
+    event = db.collection('events').document(event_id).get()
+    if not event.exists:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    event_data = event.to_dict()
+
+    # Enforce tenant isolation for listing all photos
+    if event_data.get("photographer_id") != current_user.get("uid"):
+        raise HTTPException(status_code=403, detail="Not authorized to list photos for this event")
+
+    images_ref = db.collection("images").where("event_id", "==", event_id).get()
+
+    photos = []
+    for doc in images_ref:
+        data = doc.to_dict()
+        photos.append({
+            "photo_id": doc.id,
+            "drive_file_id": data.get("drive_file_id"),
+        })
+
+    return photos
