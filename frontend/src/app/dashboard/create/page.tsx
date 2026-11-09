@@ -26,7 +26,7 @@ export default function CreateEvent() {
           name,
           client_name: clientName,
           date,
-          is_private: false // Default to public for now
+          is_private: true
         })
       });
       const data = await res.json();

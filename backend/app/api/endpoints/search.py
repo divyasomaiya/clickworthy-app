@@ -9,10 +9,14 @@ router = APIRouter()
 
 import uuid
 
+from app.core.auth import get_current_user
+from fastapi import Depends, HTTPException
+
 @router.post("/")
 async def search_faces(
     event_id: str = Form(...),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
 ):
     # Fix path traversal vulnerability
     temp_dir = "temp_search"
@@ -30,6 +34,13 @@ async def search_faces(
     db = firebase_service.get_db()
     if not db:
         return {"matches": [], "message": "Database not connected"}
+
+    event = db.collection("events").document(event_id).get()
+    if not event.exists:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.to_dict().get("photographer_id") != current_user.get("uid"):
+        raise HTTPException(status_code=403, detail="Only the photographer can list all photos via the temporary search stub.")
 
     # Return all images for the event (disabling fake AI for PR 1)
     images_ref = db.collection("images").where("event_id", "==", event_id).get()

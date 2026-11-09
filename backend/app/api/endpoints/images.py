@@ -37,8 +37,9 @@ def get_image(photo_id: str):
             raise HTTPException(status_code=403, detail="Event has expired")
 
     is_private = event_data.get("is_private", True)
-    # TODO: if is_private, verify guest token. For PR 1, we assume guest gallery links are temporarily open
-    # until a guest auth system is implemented, but we enforce expiry.
+    if is_private:
+        # Check photographer token or guest token
+        raise HTTPException(status_code=403, detail="Unauthenticated access to private event gallery is forbidden. Proper guest auth needed.")
 
     file_path = storage_provider.get_file_path(file_id)
     if not file_path:

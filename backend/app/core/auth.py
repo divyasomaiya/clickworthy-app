@@ -26,8 +26,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 async def verify_firebase_token(token: str):
-    if os.environ.get("USE_MOCK_AUTH") == "true":
-        return {"uid": "mock-photographer-uid", "email": "mock@example.com", "role": "photographer"}
     try:
         decoded_token = firebase_auth.verify_id_token(token)
         return decoded_token

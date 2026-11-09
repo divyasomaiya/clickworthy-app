@@ -7,6 +7,7 @@ from app.core.auth import get_current_user
 import shutil
 import os
 import uuid
+from PIL import Image, UnidentifiedImageError
 
 router = APIRouter()
 
@@ -74,6 +75,14 @@ async def upload_photos(
     if os.path.getsize(temp_path) > 10 * 1024 * 1024:
         os.remove(temp_path)
         raise HTTPException(status_code=400, detail="File too large")
+
+    # Validate actual image contents using Pillow
+    try:
+        with Image.open(temp_path) as img:
+            img.verify() # Verify that it is, in fact, an image
+    except UnidentifiedImageError:
+        os.remove(temp_path)
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
 
     # Upload using local storage provider
     drive_file_id = storage_provider.save_file(temp_path, file.content_type, folder_id)
