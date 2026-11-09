@@ -179,7 +179,8 @@ def test_search_returns_placeholder():
     file_bytes.seek(0)
 
     # Search should return 200 but matches empty list since it's just an empty image
-    res = client.post("/api/search/", data={"event_id": event_id, "token": token}, files={"file": ("test.jpg", file_bytes.read(), "image/jpeg")})
+    # We use Bearer headers instead of Form token for the new authenticated path.
+    res = client.post("/api/search/", data={"event_id": event_id}, files={"file": ("test.jpg", file_bytes.read(), "image/jpeg")}, headers=headers)
     assert res.status_code == 200
     assert "No face found in selfie" in res.json()["message"]
 

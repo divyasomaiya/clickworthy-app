@@ -12,16 +12,15 @@ import uuid
 from app.core.auth import get_current_user
 from fastapi import Depends, HTTPException
 
-from fastapi import Query
-from typing import Optional
-from fastapi.security import HTTPAuthorizationCredentials
 from datetime import datetime
+from app.core.auth import get_current_user
+from fastapi import Depends
 
 @router.post("/")
 async def search_faces(
     event_id: str = Form(...),
     file: UploadFile = File(...),
-    token: Optional[str] = Form(None)
+    current_user: dict = Depends(get_current_user)
 ):
     db = firebase_service.get_db()
     if not db:
@@ -40,15 +39,7 @@ async def search_faces(
 
     is_private = event_data.get("is_private", True)
     if is_private:
-        if not token:
-            raise HTTPException(status_code=403, detail="Unauthenticated access to private event search is forbidden.")
-        try:
-            creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
-            current_user = await get_current_user(creds)
-        except Exception:
-            raise HTTPException(status_code=403, detail="Invalid token")
-
-        if event_data.get("photographer_id") != current_user.get("uid"):
+        if not current_user or event_data.get("photographer_id") != current_user.get("uid"):
             raise HTTPException(status_code=403, detail="Not authorized to search this private event.")
 
     temp_dir = "temp_search"
