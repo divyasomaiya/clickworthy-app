@@ -13,6 +13,8 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // We store object urls to clean them up on unmount to avoid memory leaks
+    const objectUrls: string[] = [];
     const fetchPhotos = async () => {
       try {
         const token = localStorage.getItem("access_token");
@@ -28,16 +30,31 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
           const data = await res.json();
 
           // Fetch secure images natively avoiding query strings
-          const imagesWithUrls = await Promise.all(data.map(async (match: any) => {
-            const imgRes = await fetch(`${apiUrl}/api/images/${match.photo_id}`, { headers });
-            if (imgRes.ok) {
-              const blob = await imgRes.blob();
-              const objectUrl = URL.createObjectURL(blob);
-              return { ...match, objectUrl };
-            }
-            return match;
-          }));
+          // Do not wait for all images to fetch at once to save memory.
+          // In a real app we'd paginate. Here we just set the array and let them fetch individually or when requested.
+          const imagesWithUrls = data.map((match: any) => {
+             return { ...match, objectUrl: null };
+          });
           setMatches(imagesWithUrls);
+
+          // Lazy load them sequentially to avoid killing memory
+          for (let i = 0; i < imagesWithUrls.length; i++) {
+              const match = imagesWithUrls[i];
+              try {
+                  const imgRes = await fetch(`${apiUrl}/api/images/${match.photo_id}`, { headers });
+                  if (imgRes.ok) {
+                      const blob = await imgRes.blob();
+                      const objectUrl = URL.createObjectURL(blob);
+                      objectUrls.push(objectUrl);
+                      setMatches(prev => {
+                          const updated = [...prev];
+                          updated[i].objectUrl = objectUrl;
+                          return updated;
+                      });
+                  }
+              } catch(e) {}
+          }
+
         } else {
           setError("Not authorized to view this gallery, or event expired.");
         }
@@ -49,6 +66,10 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
     };
 
     fetchPhotos();
+
+    return () => {
+        objectUrls.forEach(url => URL.revokeObjectURL(url));
+    }
   }, [params.id]);
 
   if (loading) return <div className="p-8 text-center">Loading gallery...</div>;

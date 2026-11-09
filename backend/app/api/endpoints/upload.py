@@ -48,15 +48,18 @@ async def upload_photos(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    folder_id = f"local_folder_{event_id}" # Logical reference for local storage
     # Check authorization for the event
     db = firebase_service.get_db()
+    event_data = None
     if db:
         event = db.collection('events').document(event_id).get()
         if not event.exists:
             raise HTTPException(status_code=404, detail="Event not found")
-        if event.to_dict().get("photographer_id") != current_user.get("uid"):
+        event_data = event.to_dict()
+        if event_data.get("photographer_id") != current_user.get("uid"):
             raise HTTPException(status_code=403, detail="Not authorized to upload to this event")
+
+    folder_id = event_data.get("drive_folders", {}).get("event_folder_id", f"local_folder_{event_id}") if event_data else f"local_folder_{event_id}"
 
     # Validate file type
     if file.content_type not in ["image/jpeg", "image/png"]:
@@ -84,8 +87,8 @@ async def upload_photos(
         os.remove(temp_path)
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
 
-    # Upload using local storage provider
-    drive_file_id = storage_provider.save_file(temp_path, file.content_type, folder_id)
+    # Upload using storage provider (Google Drive or Local)
+    drive_file_id = storage_provider.save_file(temp_path, file.content_type, folder_id, owner_id=current_user.get("uid"))
     photo_id = str(uuid.uuid4())
 
     # Save image metadata to Firestore

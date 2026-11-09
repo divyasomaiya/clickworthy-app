@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from app.models.schemas import EventCreate, EventResponse
-from app.services.google_drive import drive_service
+from app.services.storage import storage_provider
 from app.services.firebase import firebase_service
 from app.core.auth import get_current_user
 import uuid
@@ -24,8 +24,11 @@ def create_event(event: EventCreate, current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     event_id = str(uuid.uuid4())
-    # Omit Drive folder specifics for local storage. We will use a logical reference.
-    folders = {"event_folder_id": f"local_folder_{event_id}"}
+
+    # Create the folder structure using the generic storage provider.
+    folder_name = f"{event.date}_{event.client_name}_{event.name}"
+    event_folder_id = storage_provider.create_folder(folder_name, owner_id=photographer_id)
+    folders = {"event_folder_id": event_folder_id}
 
     # Store event metadata in Firestore
     db = firebase_service.get_db()

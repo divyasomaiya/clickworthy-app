@@ -169,3 +169,26 @@ def test_search_returns_placeholder():
     res = client.post("/api/search/", data={"event_id": "test"}, files={"file": ("test.jpg", file_bytes, "image/jpeg")}, headers=headers)
     assert res.status_code == 200
     assert "AI matching is disabled" in res.json()["message"]
+
+@patch("app.api.endpoints.gdrive.google_auth_oauthlib.flow.Flow")
+def test_gdrive_auth_route(mock_flow):
+    # Ensure it returns an auth URL when env variables are mocked
+    os.environ["GOOGLE_CLIENT_ID"] = "mock"
+    os.environ["GOOGLE_CLIENT_SECRET"] = "mock"
+
+    from app.core.config import settings
+    settings.GOOGLE_CLIENT_ID = "mock"
+    settings.GOOGLE_CLIENT_SECRET = "mock"
+
+    class MockFlow:
+        def authorization_url(self, **kwargs):
+            return "https://mock-auth-url", "mock-state"
+
+    mock_flow.from_client_config.return_value = MockFlow()
+
+    token = get_test_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    res = client.get("/api/gdrive/auth", headers=headers)
+
+    assert res.status_code == 200
+    assert "authorization_url" in res.json()
