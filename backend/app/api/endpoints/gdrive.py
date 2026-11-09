@@ -12,11 +12,16 @@ import os
 
 router = APIRouter()
 
+import secrets
+from datetime import datetime, timedelta
+
 # Setup Fernet for token encryption
 def get_fernet():
     key = settings.ENCRYPTION_KEY
     if not key:
-        # Fallback for dev only. Production MUST have ENCRYPTION_KEY.
+        if os.environ.get("ENVIRONMENT") == "production":
+            raise Exception("ENCRYPTION_KEY is required in production.")
+        # Only for local dev tests without keys
         key = base64.urlsafe_b64encode(b"0" * 32).decode()
     return Fernet(key)
 
@@ -54,10 +59,19 @@ def gdrive_auth(current_user: dict = Depends(get_current_user)):
         prompt='consent' # Force consent to ensure we get a refresh token
     )
 
-    # In a real app we'd sign/encrypt the state or store it in a session DB.
-    # For now, we will pack the user ID into the state.
-    state_payload = {"uid": current_user.get("uid"), "state": state}
+    # Generate cryptographically secure state
+    secure_state = secrets.token_urlsafe(32)
+    state_payload = {
+        "uid": current_user.get("uid"),
+        "state": secure_state,
+        "exp": (datetime.now() + timedelta(minutes=15)).isoformat()
+    }
     encoded_state = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
+
+    # Store state signature in DB to prevent replay
+    db = firebase_service.get_db()
+    if db:
+        db.collection("oauth_states").document(secure_state).set(state_payload)
 
     # Re-generate url with custom state
     authorization_url, _ = flow.authorization_url(
@@ -75,8 +89,22 @@ def gdrive_callback(request: Request, state: str, code: str):
     try:
         decoded_state = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
         uid = decoded_state.get("uid")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        secure_state = decoded_state.get("state")
+        exp = datetime.fromisoformat(decoded_state.get("exp"))
+
+        if datetime.now() > exp:
+            raise Exception("State expired")
+
+        db = firebase_service.get_db()
+        if db:
+            state_doc = db.collection("oauth_states").document(secure_state).get()
+            if not state_doc.exists or state_doc.to_dict().get("uid") != uid:
+                raise Exception("State tampered or reused")
+            # Delete state to prevent replay
+            db.collection("oauth_states").document(secure_state).delete()
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid state parameter: {e}")
 
     flow = google_auth_oauthlib.flow.Flow.from_client_config(
         get_client_config(),
@@ -127,16 +155,38 @@ def gdrive_callback(request: Request, state: str, code: str):
     frontend_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
     return RedirectResponse(f"{frontend_url}/dashboard?gdrive=connected")
 
+from googleapiclient.discovery import build
+import httpx
+
 @router.delete("/disconnect")
 def gdrive_disconnect(current_user: dict = Depends(get_current_user)):
     db = firebase_service.get_db()
     if not db:
         raise HTTPException(status_code=500, detail="Database not available")
 
-    # Remove token data
-    db.collection("photographers").document(current_user.get("uid")).update({
-        "gdrive_token": firestore.DELETE_FIELD,
-        "gdrive_connected": False
-    })
+    uid = current_user.get("uid")
+    doc = db.collection("photographers").document(uid).get()
+
+    if doc.exists:
+        data = doc.to_dict()
+        encrypted_token = data.get("gdrive_token")
+
+        # Optionally revoke the token from Google side if we have it
+        if encrypted_token:
+            try:
+                fernet = get_fernet()
+                decrypted = fernet.decrypt(encrypted_token.encode()).decode()
+                token_data = json.loads(decrypted)
+                access_token = token_data.get("token")
+                if access_token:
+                    httpx.post('https://oauth2.googleapis.com/revoke', data={'token': access_token})
+            except Exception as e:
+                print(f"Failed to revoke token externally: {e}")
+
+        # Remove token data locally
+        db.collection("photographers").document(uid).update({
+            "gdrive_token": "DELETE_FIELD",
+            "gdrive_connected": False
+        })
 
     return {"message": "Google Drive disconnected"}

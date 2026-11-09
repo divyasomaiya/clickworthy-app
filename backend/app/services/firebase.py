@@ -34,9 +34,30 @@ class LocalMockDB:
                         self.coll = coll
                         self.did = did
 
-                    def set(self, data: dict):
-                        self.coll.db.data[self.coll.name][self.did] = data
+                    def set(self, data: dict, merge: bool = False):
+                        if merge:
+                            existing = self.coll.db.data[self.coll.name].get(self.did, {})
+                            existing.update(data)
+                            self.coll.db.data[self.coll.name][self.did] = existing
+                        else:
+                            self.coll.db.data[self.coll.name][self.did] = data
                         self.coll.db._save()
+
+                    def update(self, data: dict):
+                        if self.did not in self.coll.db.data[self.coll.name]:
+                            raise Exception("Cannot update non-existent document")
+                        # Handle firestore.DELETE_FIELD (mocked as string for local tests)
+                        for k, v in data.items():
+                            if v == "DELETE_FIELD":
+                                self.coll.db.data[self.coll.name][self.did].pop(k, None)
+                            else:
+                                self.coll.db.data[self.coll.name][self.did][k] = v
+                        self.coll.db._save()
+
+                    def delete(self):
+                        if self.did in self.coll.db.data[self.coll.name]:
+                            del self.coll.db.data[self.coll.name][self.did]
+                            self.coll.db._save()
 
                     def get(self):
                         class MockDocSnapshot:

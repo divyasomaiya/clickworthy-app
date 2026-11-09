@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from app.models.schemas import EventCreate, EventResponse
-from app.services.storage import storage_provider
+from app.services.storage import storage_manager
 from app.services.firebase import firebase_service
 from app.core.auth import get_current_user
 import uuid
@@ -25,13 +25,22 @@ def create_event(event: EventCreate, current_user: dict = Depends(get_current_us
 
     event_id = str(uuid.uuid4())
 
+    # Determine storage provider (local or gdrive based on photographer connection)
+    db = firebase_service.get_db()
+    storage_provider_name = "local"
+    if db:
+        photographer_doc = db.collection("photographers").document(photographer_id).get()
+        if photographer_doc.exists and photographer_doc.to_dict().get("gdrive_connected"):
+            storage_provider_name = "gdrive"
+
+    storage_provider = storage_manager.get_provider(storage_provider_name)
+
     # Create the folder structure using the generic storage provider.
     folder_name = f"{event.date}_{event.client_name}_{event.name}"
     event_folder_id = storage_provider.create_folder(folder_name, owner_id=photographer_id)
     folders = {"event_folder_id": event_folder_id}
 
     # Store event metadata in Firestore
-    db = firebase_service.get_db()
     if db:
         event_ref = db.collection('events').document(event_id)
         event_ref.set({
@@ -40,6 +49,7 @@ def create_event(event: EventCreate, current_user: dict = Depends(get_current_us
             "date": event.date,
             "photographer_id": photographer_id,
             "drive_folders": folders,
+            "storage_provider": storage_provider_name,
             "expiry_date": event.expiry_date,
             "is_private": event.is_private,
             "created_at": datetime.datetime.now().isoformat()

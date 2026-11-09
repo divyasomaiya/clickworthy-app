@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, UploadFile, Form, BackgroundTasks, HTTPException, Depends
-from app.services.storage import storage_provider
+from app.services.storage import storage_manager
 from app.services.firebase import firebase_service
 from app.services.face_recognition import face_service
 from app.services.vector_store import faiss_index
@@ -87,6 +87,10 @@ async def upload_photos(
         os.remove(temp_path)
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
 
+    # Determine which storage provider to use based on event data
+    storage_provider_name = event_data.get("storage_provider", "local") if event_data else "local"
+    storage_provider = storage_manager.get_provider(storage_provider_name)
+
     # Upload using storage provider (Google Drive or Local)
     drive_file_id = storage_provider.save_file(temp_path, file.content_type, folder_id, owner_id=current_user.get("uid"))
     photo_id = str(uuid.uuid4())
@@ -96,6 +100,7 @@ async def upload_photos(
         db.collection("images").document(photo_id).set({
             "event_id": event_id,
             "drive_file_id": drive_file_id, # Can rename to file_id later
+            "storage_provider": storage_provider_name,
             "filename": file.filename
         })
 

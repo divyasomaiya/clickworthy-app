@@ -1,17 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
-from app.services.storage import storage_provider
+from app.services.storage import storage_manager
 from app.services.firebase import firebase_service
-# Note: For public guest access, we might need a different auth mechanism later.
-# For now, we allow access if the event is public or if the user is authorized.
+from datetime import datetime
 from app.core.auth import get_current_user
 
 router = APIRouter()
-
-from datetime import datetime
-
-from app.core.auth import get_current_user
-from fastapi import Depends
 
 @router.get("/{photo_id}")
 async def get_image(
@@ -29,6 +23,7 @@ async def get_image(
     image_data = image_doc.to_dict()
     event_id = image_data.get("event_id")
     file_id = image_data.get("drive_file_id")
+    storage_provider_name = image_data.get("storage_provider", "local")
 
     # Check event privacy and expiry
     event_doc = db.collection("events").document(event_id).get()
@@ -49,7 +44,12 @@ async def get_image(
         if not current_user or event_data.get("photographer_id") != current_user.get("uid"):
             raise HTTPException(status_code=403, detail="Not authorized to view private event photos.")
 
-    file_path = storage_provider.get_file_path(file_id)
+    try:
+        storage_provider = storage_manager.get_provider(storage_provider_name)
+    except ValueError:
+        raise HTTPException(status_code=500, detail="Invalid storage provider configuration.")
+
+    file_path = storage_provider.get_file_path(file_id, owner_id=event_data.get("photographer_id"))
     if not file_path:
         raise HTTPException(status_code=404, detail="File not found on storage")
 

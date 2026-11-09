@@ -56,9 +56,6 @@ class LocalStorageProvider(StorageProvider):
         return f"local_folder_{uuid.uuid4()}"
 
 class GoogleDriveProvider(StorageProvider):
-    def __init__(self):
-        self.local_fallback = LocalStorageProvider()
-
     def _get_credentials(self, owner_id: str) -> Optional[Credentials]:
         if not owner_id:
             return None
@@ -98,7 +95,7 @@ class GoogleDriveProvider(StorageProvider):
     def create_folder(self, folder_name: str, owner_id: str = None) -> str:
         service = self._get_service(owner_id)
         if not service:
-            return self.local_fallback.create_folder(folder_name, owner_id)
+            raise Exception("Google Drive not connected or unauthorized")
 
         file_metadata = {
             'name': folder_name,
@@ -109,8 +106,8 @@ class GoogleDriveProvider(StorageProvider):
 
     def save_file(self, temp_file_path: str, content_type: str, folder_id: str, owner_id: str = None) -> str:
         service = self._get_service(owner_id)
-        if not service or "local_folder_" in folder_id:
-            return self.local_fallback.save_file(temp_file_path, content_type, folder_id, owner_id)
+        if not service:
+            raise Exception("Google Drive not connected or unauthorized")
 
         file_name = os.path.basename(temp_file_path)
         file_metadata = {
@@ -122,14 +119,9 @@ class GoogleDriveProvider(StorageProvider):
         return file.get('id')
 
     def get_file_path(self, file_id: str, owner_id: str = None) -> Optional[str]:
-        # Google Drive files don't have a "local path". We need to download it or proxy it.
-        # For simplicity in this architecture, we will download it to a temp dir and return that path.
-        if not file_id or "local_folder_" in file_id or len(file_id) > 50:
-            return self.local_fallback.get_file_path(file_id, owner_id)
-
         service = self._get_service(owner_id)
         if not service:
-            return self.local_fallback.get_file_path(file_id, owner_id)
+            raise Exception("Google Drive not connected or unauthorized")
 
         import io
         from googleapiclient.http import MediaIoBaseDownload
@@ -146,4 +138,17 @@ class GoogleDriveProvider(StorageProvider):
 
         return temp_path
 
-storage_provider = GoogleDriveProvider()
+class StorageManager:
+    def __init__(self):
+        self.providers = {
+            "local": LocalStorageProvider(),
+            "gdrive": GoogleDriveProvider()
+        }
+
+    def get_provider(self, provider_name: str) -> StorageProvider:
+        provider = self.providers.get(provider_name)
+        if not provider:
+            raise ValueError(f"Unknown storage provider: {provider_name}")
+        return provider
+
+storage_manager = StorageManager()

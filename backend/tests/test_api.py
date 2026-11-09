@@ -192,3 +192,16 @@ def test_gdrive_auth_route(mock_flow):
 
     assert res.status_code == 200
     assert "authorization_url" in res.json()
+
+@patch("app.api.endpoints.gdrive.httpx.post")
+def test_gdrive_disconnect(mock_post):
+    token = get_test_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # We test local fallback update delete handling essentially
+    res = client.delete("/api/gdrive/disconnect", headers=headers)
+
+    # It might return 200 even if there was nothing to disconnect,
+    # but the point is we test the mock DB update operation handling DELETE_FIELD string.
+    assert res.status_code == 200
+    assert res.json()["message"] == "Google Drive disconnected"
