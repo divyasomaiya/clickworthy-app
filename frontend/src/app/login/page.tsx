@@ -79,14 +79,6 @@ export default function LoginPage() {
           >
             {loading ? "Signing in..." : "Continue with Google"}
           </Button>
-          <Button
-            variant="outline"
-            className="w-full h-12 text-md flex items-center justify-center gap-2 border-slate-300 dark:border-slate-700"
-            onClick={handleBypassLogin}
-            disabled={loading}
-          >
-            Bypass Google Login (Local Dev Mode)
-          </Button>
         </div>
       </div>
     </div>

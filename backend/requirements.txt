@@ -8,9 +8,9 @@ google-auth-oauthlib==1.1.0
 firebase-admin==6.2.0
 python-multipart==0.0.6
 # insightface==0.7.3 (optional, falls back to offline mock face service if not installed)
-onnxruntime==1.16.1
+onnxruntime==1.17.0
 opencv-python-headless==4.8.1.78
-faiss-cpu==1.7.4
+faiss-cpu==1.8.0
 numpy==1.26.2
 Pillow==10.1.0
 python-jose[cryptography]==3.3.0

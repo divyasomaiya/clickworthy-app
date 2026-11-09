@@ -7,18 +7,43 @@ import os
 
 router = APIRouter()
 
+import uuid
+
 @router.post("/")
 async def search_faces(
     event_id: str = Form(...),
     file: UploadFile = File(...)
 ):
-    temp_path = f"temp_{file.filename}"
+    # Fix path traversal vulnerability
+    temp_dir = "temp_search"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, f"{uuid.uuid4()}.tmp")
+
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Get embedding for the uploaded selfie
-    faces = face_service.process_image(temp_path)
+    # Note: For PR 1 we bypass fake AI search. We just return all images for the event for testing.
+    # In a real app we'd get embeddings and search FAISS.
+
     os.remove(temp_path)
+
+    db = firebase_service.get_db()
+    if not db:
+        return {"matches": [], "message": "Database not connected"}
+
+    # Return all images for the event (disabling fake AI for PR 1)
+    images_ref = db.collection("images").where("event_id", "==", event_id).get()
+
+    matched_photos = []
+    for doc in images_ref:
+        data = doc.to_dict()
+        matched_photos.append({
+            "photo_id": doc.id,
+            "drive_file_id": data.get("drive_file_id"),
+            "distance": 0.0
+        })
+
+    return {"matches": matched_photos}
 
     if not faces:
         return {"matches": [], "message": "No face found in selfie"}

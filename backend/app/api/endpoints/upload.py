@@ -1,8 +1,9 @@
-from fastapi import APIRouter, File, UploadFile, Form, BackgroundTasks
-from app.services.google_drive import drive_service
+from fastapi import APIRouter, File, UploadFile, Form, BackgroundTasks, HTTPException, Depends
+from app.services.storage import storage_provider
 from app.services.firebase import firebase_service
 from app.services.face_recognition import face_service
 from app.services.vector_store import faiss_index
+from app.core.auth import get_current_user
 import shutil
 import os
 import uuid
@@ -44,30 +45,50 @@ async def upload_photos(
     background_tasks: BackgroundTasks,
     event_id: str = Form(...),
     folder_id: str = Form(...),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
 ):
-    # Save file temporarily
+    # Check authorization for the event
+    db = firebase_service.get_db()
+    if db:
+        event = db.collection('events').document(event_id).get()
+        if not event.exists:
+            raise HTTPException(status_code=404, detail="Event not found")
+        if event.to_dict().get("photographer_id") != current_user.get("uid"):
+            raise HTTPException(status_code=403, detail="Not authorized to upload to this event")
+
+    # Validate file type
+    if file.content_type not in ["image/jpeg", "image/png"]:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+
+    # Save file temporarily using a secure UUID instead of filename to prevent path traversal
     temp_dir = "temp_uploads"
     os.makedirs(temp_dir, exist_ok=True)
-    temp_path = os.path.join(temp_dir, file.filename)
+    temp_filename = f"{uuid.uuid4()}.tmp"
+    temp_path = os.path.join(temp_dir, temp_filename)
 
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Upload to Google Drive
-    drive_file_id = drive_service.upload_file(temp_path, file.content_type, folder_id)
+    # Check file size (e.g. max 10MB)
+    if os.path.getsize(temp_path) > 10 * 1024 * 1024:
+        os.remove(temp_path)
+        raise HTTPException(status_code=400, detail="File too large")
+
+    # Upload using local storage provider
+    drive_file_id = storage_provider.save_file(temp_path, file.content_type, folder_id)
     photo_id = str(uuid.uuid4())
 
     # Save image metadata to Firestore
-    db = firebase_service.get_db()
     if db:
         db.collection("images").document(photo_id).set({
             "event_id": event_id,
-            "drive_file_id": drive_file_id,
+            "drive_file_id": drive_file_id, # Can rename to file_id later
             "filename": file.filename
         })
 
     # Trigger background AI processing
+    # Note: fake AI should ideally be removed, but for now we'll pass the temp_path
     background_tasks.add_task(process_and_index_image, temp_path, event_id, photo_id)
 
     return {"message": "Upload started", "photo_id": photo_id, "drive_file_id": drive_file_id}

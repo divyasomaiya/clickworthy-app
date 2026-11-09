@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import events, upload, search, auth
+from app.api.endpoints import events, upload, search, auth, images
 
 app = FastAPI(
     title="AI Photo Platform API",
@@ -24,3 +24,4 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(images.router, prefix="/api/images", tags=["images"])

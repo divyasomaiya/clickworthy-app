@@ -11,15 +11,30 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Basic auth check
-    if (!localStorage.getItem("access_token")) {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
       router.push("/login");
       return;
     }
 
-    // In a real app, fetch events from the backend using the token
-    // Example: fetch("/api/events/me", { headers: { Authorization: `Bearer ${token}` } })
-    setLoading(false);
+    const fetchEvents = async () => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const res = await fetch(`${apiUrl}/api/events/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setEvents(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch events", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
   }, [router]);
 
   if (loading) return null;

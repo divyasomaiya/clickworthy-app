@@ -2,14 +2,28 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.models.schemas import EventCreate, EventResponse
 from app.services.google_drive import drive_service
 from app.services.firebase import firebase_service
+from app.core.auth import get_current_user
 import uuid
 import datetime
 
 router = APIRouter()
 
+@router.get("/me")
+def list_my_events(current_user: dict = Depends(get_current_user)):
+    db = firebase_service.get_db()
+    if not db:
+        return []
+
+    events = db.collection('events').where('photographer_id', '==', current_user.get("uid")).get()
+    return [{"id": e.id, **e.to_dict()} for e in events]
+
 @router.post("/", response_model=EventResponse)
-def create_event(event: EventCreate):
-    # Setup google drive folders
+def create_event(event: EventCreate, current_user: dict = Depends(get_current_user)):
+    photographer_id = current_user.get("uid")
+    if not photographer_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Setup google drive folders (or local storage abstraction in next step)
     folder_name = f"{event.date}_{event.client_name}_{event.name}"
     folders = drive_service.setup_event_folders(folder_name)
 
@@ -23,19 +37,23 @@ def create_event(event: EventCreate):
             "name": event.name,
             "client_name": event.client_name,
             "date": event.date,
-            "photographer_id": event.photographer_id,
+            "photographer_id": photographer_id,
             "drive_folders": folders,
+            "expiry_date": event.expiry_date,
+            "is_private": event.is_private,
             "created_at": datetime.datetime.now().isoformat()
         })
 
     return EventResponse(
         event_id=event_id,
         name=event.name,
-        drive_folder_id=folders.get("event_folder_id", "")
+        drive_folder_id=folders.get("event_folder_id", ""),
+        photographer_id=photographer_id,
+        expiry_date=event.expiry_date
     )
 
 @router.get("/{event_id}")
-def get_event(event_id: str):
+def get_event(event_id: str, current_user: dict = Depends(get_current_user)):
     db = firebase_service.get_db()
     if not db:
         # Return mock event for offline testing
@@ -44,13 +62,9 @@ def get_event(event_id: str):
             "name": "Mock Test Event",
             "client_name": "Mock Client",
             "date": "2026-05-27",
-            "photographer_id": "admin-photographer-id",
+            "photographer_id": current_user.get("uid", "mock"),
             "drive_folders": {
                 "event_folder_id": "mock_folder_id",
-                "raw_id": "mock_raw_id",
-                "edited_id": "mock_edited_id",
-                "compressed_id": "mock_compressed_id",
-                "ai_processed_id": "mock_ai_processed_id"
             },
             "created_at": "2026-05-27T00:00:00"
         }
@@ -59,4 +73,10 @@ def get_event(event_id: str):
     if not event.exists:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    return event.to_dict()
+    event_data = event.to_dict()
+
+    # Enforce tenant isolation
+    if event_data.get("photographer_id") != current_user.get("uid"):
+        raise HTTPException(status_code=403, detail="Not authorized to view this event")
+
+    return {"id": event.id, **event_data}

@@ -20,3 +20,5 @@ backend/temp_uploads/
 backend/app/faces.index
 backend/app/faces_map.json
 .insightface/
+*.pyc
+__pycache__/

@@ -14,15 +14,19 @@ export default function CreateEvent() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem("access_token");
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const res = await fetch(`${apiUrl}/api/events/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           name,
           client_name: clientName,
           date,
-          photographer_id: "admin-photographer-id" // Replace with real auth
+          is_private: false // Default to public for now
         })
       });
       const data = await res.json();

@@ -12,6 +12,7 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
     setUploading(true);
     const files = Array.from(e.target.files);
 
+    const token = localStorage.getItem("access_token");
     for (const file of files) {
       const formData = new FormData();
       formData.append("file", file);
@@ -22,6 +23,9 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         await fetch(`${apiUrl}/api/upload/`, {
           method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          },
           body: formData,
         });
       } catch (error) {

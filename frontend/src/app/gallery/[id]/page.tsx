@@ -70,20 +70,27 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
               </div>
             ) : (
               <div className="columns-1 sm:columns-2 md:columns-3 gap-4 space-y-4">
-                {matches.map((match, i) => (
-                  <div key={i} className="break-inside-avoid rounded-lg overflow-hidden relative group">
-                    {/* In a real app, you would fetch a temporary signed URL from Google Drive here */}
-                    <div className="aspect-[3/4] bg-slate-200 animate-pulse relative">
-                       {/* Placeholder for the actual image. Requires a secure proxy endpoint from the backend */}
-                       <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-                         Image {match.photo_id.substring(0, 8)}
-                       </div>
+                {matches.map((match, i) => {
+                  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                  const imageUrl = `${apiUrl}/api/images/${match.photo_id}`;
+                  return (
+                    <div key={i} className="break-inside-avoid rounded-lg overflow-hidden relative group">
+                      <div className="relative">
+                        <img
+                          src={imageUrl}
+                          alt="Event photo"
+                          className="w-full h-auto object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                        <Button variant="secondary" size="sm" asChild>
+                          <a href={imageUrl} download>Download</a>
+                        </Button>
+                      </div>
                     </div>
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                      <Button variant="secondary" size="sm">Download</Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
