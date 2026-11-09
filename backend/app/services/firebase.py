@@ -80,6 +80,8 @@ class FirebaseService:
     def __init__(self):
         self.db = None
         self.local_db = None
+        is_prod = os.environ.get("ENVIRONMENT") == "production"
+
         if os.path.exists(settings.FIREBASE_CREDENTIALS):
             try:
                 cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS)
@@ -87,9 +89,15 @@ class FirebaseService:
                     firebase_admin.initialize_app(cred)
                 self.db = firestore.client()
             except Exception as e:
-                print(f"Error initializing Firebase, falling back to local DB: {e}")
-                self.local_db = LocalMockDB()
+                print(f"Error initializing Firebase: {e}")
+                if not is_prod:
+                    print("Falling back to local DB for development.")
+                    self.local_db = LocalMockDB()
+                else:
+                    raise Exception("Firebase initialization failed in production.") from e
         else:
+            if is_prod:
+                raise Exception("Missing FIREBASE_CREDENTIALS in production.")
             self.local_db = LocalMockDB()
 
     def get_db(self):

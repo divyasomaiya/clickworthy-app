@@ -130,11 +130,11 @@ def test_private_image_retrieval_unauthorized():
 
     # Attempt to retrieve with other user's token (should fail 403)
     other_token = get_test_token("other-uid")
-    get_other = client.get(f"/api/images/{photo_id}?token={other_token}")
+    get_other = client.get(f"/api/images/{photo_id}", headers={"Authorization": f"Bearer {other_token}"})
     assert get_other.status_code == 403
 
     # Attempt to retrieve with owner's token (should succeed 200)
-    get_owner = client.get(f"/api/images/{photo_id}?token={token}")
+    get_owner = client.get(f"/api/images/{photo_id}", headers=headers)
     assert get_owner.status_code == 200
 
 def test_get_event_photos_tenant_isolation():

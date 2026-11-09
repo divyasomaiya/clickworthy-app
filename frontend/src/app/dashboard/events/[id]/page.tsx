@@ -33,7 +33,7 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
     }
 
     setUploading(false);
-    alert("Uploads complete! AI is processing in the background.");
+    alert("Uploads complete!");
   };
 
   return (
@@ -47,7 +47,7 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
 
       <div className="border-2 border-dashed border-slate-300 rounded-lg p-12 text-center">
         <h3 className="text-lg font-medium mb-4">Upload Event Photos</h3>
-        <p className="text-slate-500 mb-6">Photos will be uploaded to Google Drive and scanned by AI</p>
+        <p className="text-slate-500 mb-6">Photos will be securely uploaded and processed.</p>
 
         <input
           type="file"
