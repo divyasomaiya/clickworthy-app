@@ -27,8 +27,8 @@ The platform is designed around 4 distinct roles:
 
 ## 5. Pending Work & Next Steps (Milestones 4+)
 **COMPLETED: Milestone 3 (OpenCV AI)**
-- Switched out InsightFace for OpenCV YuNet (detection) and SFace (recognition).
-- Restored AI background processing inside uploads gracefully indexing FAISS elements and cleanly supporting group photos mapping multiple distinct face embeddings iteratively per image.
+- Switched out InsightFace for OpenCV YuNet (detection) and SFace (recognition). (Tested structurally through `test_ai_integration.py` successfully.)
+- Restored AI background processing inside uploads gracefully indexing FAISS elements and cleanly supporting group photos mapping multiple distinct face embeddings iteratively per image. (Tested structurally inside API flow successfully.)
 - Filtered FAISS searches mapping L2 distances precisely mapping cosine similarities dynamically linking matches accurately returning matched identifiers successfully processing natively.
 - Locked search endpoints securing operations verifying Privacy flags tightly throwing Unauthorized Exceptions if missing token definitions globally enforcing rules fully.
 - Resolved temporary frontend Playwright verifications simulating full authentication scenarios generating dashboards accurately generating verifiable outputs gracefully.

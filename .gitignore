@@ -23,3 +23,5 @@ backend/app/faces_map.json
 *.pyc
 __pycache__/
 backend/local_db.json
+frontend.log
+backend.log

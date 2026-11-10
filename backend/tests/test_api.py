@@ -38,6 +38,25 @@ def test_login_returns_token(mock_verify):
     assert response.status_code == 200
     assert "access_token" in response.json()
 
+def test_auth_me_returns_gdrive_connected():
+    token = get_test_token("test-uid")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # First, hitting /me without any gdrive status set
+    res1 = client.get("/api/auth/me", headers=headers)
+    assert res1.status_code == 200
+    assert res1.json().get("uid") == "test-uid"
+    assert res1.json().get("gdrive_connected", False) is False
+
+    # Mock setting gdrive connected status in DB
+    from app.services.firebase import firebase_service
+    db = firebase_service.get_db()
+    db.collection("photographers").document("test-uid").set({"gdrive_connected": True})
+
+    res2 = client.get("/api/auth/me", headers=headers)
+    assert res2.status_code == 200
+    assert res2.json().get("gdrive_connected") is True
+
 def test_create_event_without_auth_fails():
     response = client.post("/api/events/", json={
         "name": "Test",
@@ -178,9 +197,19 @@ def test_search_returns_placeholder():
     image.save(file_bytes, format='JPEG')
     file_bytes.seek(0)
 
+    img_data = file_bytes.read()
+
+    # Search should return 403 when unauthenticated
+    res_unauth = client.post("/api/search/", data={"event_id": event_id}, files={"file": ("test.jpg", img_data, "image/jpeg")})
+    assert res_unauth.status_code == 401 # No token header = 401 via Depends(get_current_user)
+
+    # Search should return 403 when using another user's token
+    other_token = get_test_token("other-uid")
+    res_other = client.post("/api/search/", data={"event_id": event_id}, files={"file": ("test.jpg", img_data, "image/jpeg")}, headers={"Authorization": f"Bearer {other_token}"})
+    assert res_other.status_code == 403
+
     # Search should return 200 but matches empty list since it's just an empty image
-    # We use Bearer headers instead of Form token for the new authenticated path.
-    res = client.post("/api/search/", data={"event_id": event_id}, files={"file": ("test.jpg", file_bytes.read(), "image/jpeg")}, headers=headers)
+    res = client.post("/api/search/", data={"event_id": event_id}, files={"file": ("test.jpg", img_data, "image/jpeg")}, headers=headers)
     assert res.status_code == 200
     assert "No face found in selfie" in res.json()["message"]
 

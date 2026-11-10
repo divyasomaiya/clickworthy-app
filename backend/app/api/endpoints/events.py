@@ -30,7 +30,7 @@ def create_event(event: EventCreate, current_user: dict = Depends(get_current_us
     storage_provider_name = "local"
     if db:
         photographer_doc = db.collection("photographers").document(photographer_id).get()
-        if photographer_doc.exists and photographer_doc.to_dict().get("gdrive_connected"):
+        if photographer_doc.exists and photographer_doc.to_dict().get("gdrive_connected") and photographer_doc.to_dict().get("gdrive_token"):
             storage_provider_name = "gdrive"
 
     storage_provider = storage_manager.get_provider(storage_provider_name)

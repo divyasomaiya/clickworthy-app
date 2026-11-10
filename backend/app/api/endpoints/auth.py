@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.core.auth import verify_firebase_token, create_access_token, get_current_user
+from app.services.firebase import firebase_service
 from datetime import timedelta
 
 router = APIRouter()
