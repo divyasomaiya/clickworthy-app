@@ -199,9 +199,10 @@ def test_search_returns_placeholder():
 
     img_data = file_bytes.read()
 
-    # Search should return 403 when unauthenticated
+    # Search should return 403 when unauthenticated. We do not use Depends for current_user directly on the route,
+    # instead we check the token in the route logic, so it's a 403, not a 401.
     res_unauth = client.post("/api/search/", data={"event_id": event_id}, files={"file": ("test.jpg", img_data, "image/jpeg")})
-    assert res_unauth.status_code == 401 # No token header = 401 via Depends(get_current_user)
+    assert res_unauth.status_code == 403
 
     # Search should return 403 when using another user's token
     other_token = get_test_token("other-uid")
