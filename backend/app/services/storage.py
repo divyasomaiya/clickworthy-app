@@ -76,7 +76,7 @@ class GoogleDriveProvider(StorageProvider):
 
         key = settings.ENCRYPTION_KEY
         if not key:
-            key = base64.urlsafe_b64encode(b"0" * 32).decode()
+            raise Exception("ENCRYPTION_KEY is required to decrypt Google Drive credentials.")
 
         fernet = Fernet(key)
         try:

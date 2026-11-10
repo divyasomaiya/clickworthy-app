@@ -214,6 +214,61 @@ def test_search_returns_placeholder():
     assert res.status_code == 200
     assert "No face found in selfie" in res.json()["message"]
 
+def test_gdrive_oauth_state_replay():
+    import base64
+    import json
+    from app.services.firebase import firebase_service
+    from datetime import datetime, timedelta
+
+    os.environ["ENCRYPTION_KEY"] = base64.urlsafe_b64encode(b"0" * 32).decode()
+    from app.core.config import settings
+    settings.ENCRYPTION_KEY = os.environ["ENCRYPTION_KEY"]
+
+    # Simulate an oauth flow and attempt to consume state twice
+    token = get_test_token()
+
+    secure_state = "mock_secure_state_123"
+    state_payload = {
+        "uid": "test-uid",
+        "state": secure_state,
+        "exp": (datetime.now() + timedelta(minutes=15)).isoformat()
+    }
+
+    db = firebase_service.get_db()
+    db.collection("oauth_states").document(secure_state).set(state_payload)
+
+    encoded_state = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
+
+    # We will just test the callback directly, mocking the google flow
+    with patch("app.api.endpoints.gdrive.google_auth_oauthlib.flow.Flow") as mock_flow:
+        class MockFlow:
+            def __init__(self, *args, **kwargs):
+                self.credentials = type('MockCreds', (), {
+                    'token': 't',
+                    'refresh_token': 'r',
+                    'token_uri': 'tu',
+                    'client_id': 'cid',
+                    'client_secret': 'cs',
+                    'scopes': []
+                })()
+                self.redirect_uri = ""
+            def fetch_token(self, **kwargs):
+                pass
+
+        mock_flow.from_client_config.return_value = MockFlow()
+
+        # First consumption should succeed (return 200/Redirect)
+        # Note: the test client follows redirects if follow_redirects=True.
+        # But we disabled mock routes initially for the callback by setting redirect uri to nothing.
+        # It's an HTTP 200 OK after Redirect normally, but we get 404 because the frontend URL is not configured.
+        # Let's set follow_redirects=False to catch the 307 Temporary Redirect explicitly
+        res1 = client.get(f"/api/gdrive/callback?state={encoded_state}&code=mock_code", follow_redirects=False)
+        assert res1.status_code in [200, 307] # Redirects actually
+
+        # Second consumption should fail (400 Invalid state)
+        res2 = client.get(f"/api/gdrive/callback?state={encoded_state}&code=mock_code", follow_redirects=False)
+        assert res2.status_code == 400
+
 @patch("app.api.endpoints.gdrive.google_auth_oauthlib.flow.Flow")
 def test_gdrive_auth_route(mock_flow):
     # Ensure it returns an auth URL when env variables are mocked

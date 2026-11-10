@@ -92,20 +92,51 @@ def gdrive_callback(request: Request, state: str, code: str):
         if not db:
             raise HTTPException(status_code=500, detail="Database not available")
 
-        state_doc = db.collection("oauth_states").document(secure_state).get()
-        if not state_doc.exists:
-            raise Exception("State not found or already consumed")
+        # Execute atomic consumption
+        state_ref = db.collection("oauth_states").document(secure_state)
 
-        state_data = state_doc.to_dict()
-        # Immediately delete state to prevent replay attacks
-        db.collection("oauth_states").document(secure_state).delete()
+        # If it's the real firestore, use a transaction
+        if hasattr(db, "transaction"):
+            from google.cloud import firestore
+            @firestore.transactional
+            def consume_state(transaction, state_ref):
+                snapshot = state_ref.get(transaction=transaction)
+                if not snapshot.exists:
+                    raise Exception("State not found or already consumed")
+                data = snapshot.to_dict()
+                if data.get("uid") != uid:
+                    raise Exception("State tampered")
 
-        if state_data.get("uid") != uid:
-            raise Exception("State tampered")
+                exp = datetime.fromisoformat(data.get("exp"))
+                if datetime.now() > exp:
+                    transaction.delete(state_ref)
+                    raise Exception("State expired")
 
-        exp = datetime.fromisoformat(state_data.get("exp"))
-        if datetime.now() > exp:
-            raise Exception("State expired")
+                transaction.delete(state_ref)
+                return data
+
+            transaction = db.transaction()
+            consume_state(transaction, state_ref)
+        else:
+            # Fallback for LocalMockDB
+            state_doc = state_ref.get()
+
+            if not state_doc.exists:
+                raise Exception("State not found or already consumed")
+
+            state_data = state_doc.to_dict()
+
+            # Verify fields
+            if state_data.get("uid") != uid:
+                raise Exception("State tampered")
+
+            exp = datetime.fromisoformat(state_data.get("exp"))
+            if datetime.now() > exp:
+                state_ref.delete()
+                raise Exception("State expired")
+
+            # Consume state
+            state_ref.delete()
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid state parameter: {e}")
