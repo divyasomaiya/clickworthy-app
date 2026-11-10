@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, use } from "react";
 import { Button } from "@/components/ui/button";
 
-export default function EventDashboard({ params }: { params: { id: string } }) {
+export default function EventDashboard({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
   const [uploading, setUploading] = useState(false);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -16,7 +18,7 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
     for (const file of files) {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("event_id", params.id);
+      formData.append("event_id", id);
 
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -40,7 +42,7 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
     <div className="max-w-4xl mx-auto p-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Event Dashboard</h1>
-        <Button onClick={() => window.open(`/gallery/${params.id}`, "_blank")} variant="outline">
+        <Button onClick={() => window.open(`/gallery/${id}`, "_blank")} variant="outline">
           View Client Gallery
         </Button>
       </div>

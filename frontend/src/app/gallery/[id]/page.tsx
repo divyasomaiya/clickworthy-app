@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
 import Image from "next/image";
 
-import { useEffect } from "react";
+import { useEffect, use } from "react";
 
-export default function ClientGallery({ params }: { params: { id: string } }) {
+export default function ClientGallery({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -25,7 +27,7 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
         }
 
         // Use the new owner listing endpoint
-        const res = await fetch(`${apiUrl}/api/events/${params.id}/photos`, { headers });
+        const res = await fetch(`${apiUrl}/api/events/${id}/photos`, { headers });
         if (res.ok) {
           const data = await res.json();
 
@@ -70,7 +72,7 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
     return () => {
         objectUrls.forEach(url => URL.revokeObjectURL(url));
     }
-  }, [params.id]);
+  }, [id]);
 
   if (loading) return <div className="p-8 text-center">Loading gallery...</div>;
   if (error) return <div className="p-8 text-center text-red-500">{error}</div>;

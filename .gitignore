@@ -25,3 +25,5 @@ __pycache__/
 backend/local_db.json
 frontend.log
 backend.log
+frontend.log
+backend.log
