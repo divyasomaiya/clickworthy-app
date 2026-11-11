@@ -12,16 +12,19 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
     setUploading(true);
     const files = Array.from(e.target.files);
 
+    const token = localStorage.getItem("access_token");
     for (const file of files) {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("event_id", params.id);
-      formData.append("folder_id", "mock-folder-id"); // In real app, fetch from event details
 
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         await fetch(`${apiUrl}/api/upload/`, {
           method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          },
           body: formData,
         });
       } catch (error) {
@@ -30,7 +33,7 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
     }
 
     setUploading(false);
-    alert("Uploads complete! AI is processing in the background.");
+    alert("Uploads complete!");
   };
 
   return (
@@ -44,7 +47,7 @@ export default function EventDashboard({ params }: { params: { id: string } }) {
 
       <div className="border-2 border-dashed border-slate-300 rounded-lg p-12 text-center">
         <h3 className="text-lg font-medium mb-4">Upload Event Photos</h3>
-        <p className="text-slate-500 mb-6">Photos will be uploaded to Google Drive and scanned by AI</p>
+        <p className="text-slate-500 mb-6">Photos will be securely uploaded and processed.</p>
 
         <input
           type="file"

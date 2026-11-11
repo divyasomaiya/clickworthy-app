@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.core.auth import verify_firebase_token, create_access_token, get_current_user
+from app.services.firebase import firebase_service
 from datetime import timedelta
 
 router = APIRouter()
@@ -32,4 +33,10 @@ async def login(request: LoginRequest):
 
 @router.get("/me")
 async def read_users_me(current_user: dict = Depends(get_current_user)):
+    db = firebase_service.get_db()
+    if db:
+        doc = db.collection("photographers").document(current_user.get("uid")).get()
+        if doc.exists:
+            data = doc.to_dict()
+            current_user["gdrive_connected"] = data.get("gdrive_connected", False)
     return current_user

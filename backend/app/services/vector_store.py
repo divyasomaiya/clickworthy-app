@@ -3,7 +3,7 @@ import faiss
 import numpy as np
 
 class FaissIndex:
-    def __init__(self, index_file: str = "faces.index", dimension: int = 512):
+    def __init__(self, index_file: str = "faces.index", dimension: int = 128):
         self.index_file = index_file
         self.map_file = index_file.replace(".index", "_map.json")
         self.dimension = dimension

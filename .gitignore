@@ -20,3 +20,8 @@ backend/temp_uploads/
 backend/app/faces.index
 backend/app/faces_map.json
 .insightface/
+*.pyc
+__pycache__/
+backend/local_db.json
+frontend.log
+backend.log

@@ -8,19 +8,57 @@ import Link from "next/link";
 export default function DashboardPage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
-    // Basic auth check
-    if (!localStorage.getItem("access_token")) {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
       router.push("/login");
       return;
     }
 
-    // In a real app, fetch events from the backend using the token
-    // Example: fetch("/api/events/me", { headers: { Authorization: `Bearer ${token}` } })
-    setLoading(false);
+    const fetchData = async () => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const userRes = await fetch(`${apiUrl}/api/auth/me`, { headers });
+        if (userRes.ok) setUser(await userRes.json());
+
+        const eventsRes = await fetch(`${apiUrl}/api/events/me`, { headers });
+        if (eventsRes.ok) setEvents(await eventsRes.json());
+      } catch (e) {
+        console.error("Failed to fetch data", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, [router]);
+
+  const handleGDriveConnect = async () => {
+      const token = localStorage.getItem("access_token");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${apiUrl}/api/gdrive/auth`, {
+          headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+          const data = await res.json();
+          window.location.href = data.authorization_url;
+      }
+  };
+
+  const handleGDriveDisconnect = async () => {
+      const token = localStorage.getItem("access_token");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      await fetch(`${apiUrl}/api/gdrive/disconnect`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` }
+      });
+      setUser({ ...user, gdrive_connected: false });
+  };
 
   if (loading) return null;
 
@@ -28,9 +66,20 @@ export default function DashboardPage() {
     <div className="max-w-6xl mx-auto p-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">My Events</h1>
-        <Button asChild>
-          <Link href="/dashboard/create">Create New Event</Link>
-        </Button>
+        <div className="flex gap-4">
+            {user?.gdrive_connected ? (
+                <Button variant="outline" className="text-red-500 border-red-200 hover:bg-red-50" onClick={handleGDriveDisconnect}>
+                    Disconnect Google Drive
+                </Button>
+            ) : (
+                <Button variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50" onClick={handleGDriveConnect}>
+                    Connect Google Drive
+                </Button>
+            )}
+            <Button asChild>
+              <Link href="/dashboard/create">Create New Event</Link>
+            </Button>
+        </div>
       </div>
 
       {events.length === 0 ? (

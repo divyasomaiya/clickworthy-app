@@ -13,13 +13,8 @@ export default function LoginPage() {
   const handleLogin = async () => {
     setLoading(true);
     try {
-      let idToken = "mock-token";
-      try {
-        const result = await signInWithPopup(auth, googleProvider);
-        idToken = await result.user.getIdToken();
-      } catch (fbError) {
-        console.warn("Firebase sign-in skipped or failed. Using mock-token for local testing:", fbError);
-      }
+      const result = await signInWithPopup(auth, googleProvider);
+      const idToken = await result.user.getIdToken();
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const res = await fetch(`${apiUrl}/api/auth/login`, {
@@ -78,14 +73,6 @@ export default function LoginPage() {
             disabled={loading}
           >
             {loading ? "Signing in..." : "Continue with Google"}
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full h-12 text-md flex items-center justify-center gap-2 border-slate-300 dark:border-slate-700"
-            onClick={handleBypassLogin}
-            disabled={loading}
-          >
-            Bypass Google Login (Local Dev Mode)
           </Button>
         </div>
       </div>
