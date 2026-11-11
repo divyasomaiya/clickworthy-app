@@ -41,3 +41,6 @@ The platform is designed around 4 distinct roles:
 ## 6. Known Bugs & Limitations
 - The system heavily relies on an in-memory/local JSON dictionary if Firebase is not connected, which limits production scaling until actual Firestore is verified.
 - The `InsightFace` dependency is currently omitted from `requirements.txt` to prevent build failures until licensing is resolved.
+
+## Mobile App Status
+The application is now PWA compliant. A detailed roadmap for Android (Bubblewrap/TWA) and iOS exists in `docs/MOBILE_APP_ROADMAP.md`.
