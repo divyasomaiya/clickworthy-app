@@ -26,17 +26,23 @@ class StorageProvider(ABC):
         pass
 
 class LocalStorageProvider(StorageProvider):
-    def __init__(self, base_path: str = "backend_uploads"):
-        self.base_path = base_path
+    def __init__(self, base_path: str = None):
+        if base_path is None:
+            base_path = getattr(settings, "LOCAL_STORAGE_PATH", "backend_uploads")
+        if not os.path.isabs(base_path):
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            self.base_path = os.path.join(backend_dir, base_path)
+        else:
+            self.base_path = base_path
         os.makedirs(self.base_path, exist_ok=True)
 
     def save_file(self, temp_file_path: str, content_type: str, folder_id: str, owner_id: str = None) -> str:
+        os.makedirs(self.base_path, exist_ok=True)
         file_id = str(uuid.uuid4())
-        # Use simple extension based on content_type or default to .jpg
         ext = ".jpg"
         if content_type == "image/png":
             ext = ".png"
-        elif content_type == "image/jpeg":
+        elif content_type in ["image/jpeg", "image/jpg", "image/pjpeg"]:
             ext = ".jpg"
 
         final_path = os.path.join(self.base_path, f"{file_id}{ext}")
@@ -44,7 +50,7 @@ class LocalStorageProvider(StorageProvider):
         return file_id
 
     def get_file_path(self, file_id: str, owner_id: str = None) -> Optional[str]:
-        # Search for file_id with any supported extension
+        os.makedirs(self.base_path, exist_ok=True)
         for ext in [".jpg", ".png", ".jpeg"]:
             potential_path = os.path.join(self.base_path, f"{file_id}{ext}")
             if os.path.exists(potential_path):
@@ -52,7 +58,7 @@ class LocalStorageProvider(StorageProvider):
         return None
 
     def create_folder(self, folder_name: str, owner_id: str = None) -> str:
-        # For local, just generate a logical ID. Real dir structure is flat for simplicity.
+        os.makedirs(self.base_path, exist_ok=True)
         return f"local_folder_{uuid.uuid4()}"
 
 class GoogleDriveProvider(StorageProvider):

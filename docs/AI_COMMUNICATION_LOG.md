@@ -92,3 +92,28 @@ This file records chronologically ordered, concise entries for key decisions, qu
   - Verified backend test suite: 13/13 tests passed (`pytest -o pythonpath=.`).
   - Verified production build: Next.js 16.2.6 passed (`npm run build`) with 0 errors across all 8 routes.
   - Committed and pushed to branch `feat/dashboard-repairs`.
+
+
+---
+
+### [2026-11-18 01:45] Antigravity — Real DSLR Photo Upload Pipeline & Batch Processing Fixes
+- **Agent**: Antigravity
+- **Problem Diagnosed**:
+  1. A 14–15 MB DSLR photograph was rejected by a hardcoded 10 MB limit in `upload.py`.
+  2. Smaller WhatsApp photos failed with 500 error / network error because `LocalStorageProvider.save_file` hit `FileNotFoundError: [Errno 2] No such file or directory: 'backend_uploads\...'` when the directory was accessed before creation or after branch cleanups.
+  3. Uvicorn's `StatReload` was traversing `temp_uploads` and `backend_uploads` upon file creation/deletion, causing file lock collisions and server resets during batch uploads.
+  4. Next.js dev overlay accumulated errors due to `console.error` calls on failed upload attempts.
+- **Key Fixes Applied**:
+  - Replaced 10 MB file cap with configurable `MAX_UPLOAD_SIZE_MB = 50` in `backend/app/core/config.py`.
+  - Implemented bounded chunked streaming (1 MB chunks) in `upload_photos`, rejecting files exceeding 50 MB with early HTTP 413 without memory buffering.
+  - Made `LocalStorageProvider` automatically ensure its storage directory exists on every save and download.
+  - Configured Uvicorn reload scope to `--reload-dir app` so file uploads never trigger server reloads.
+  - Optimized `FaceRecognitionService.process_image` to scale down detection frame for images larger than 1920px while preserving the untouched full-resolution original image for cropping and storage.
+  - Rewrote Event Dashboard upload UI to provide per-file real-time status tracking (Queued, Uploading, Uploaded, Failed with exact reason), preserving batch progress when a single file fails.
+  - Replaced `console.error` with `console.warn` to prevent Next.js Redbox dev overlays.
+  - Fixed low-contrast styling on "View Client Gallery" button and alert banners.
+- **Verification**:
+  - Executed real test suite with 9/9 passing tests (small WhatsApp JPEG, 35.5 MB DSLR JPEG, 52 MB rejection, 5-image batch, exact byte-for-byte download check, Firestore metadata check, and server health check).
+  - Verified 13/13 passing backend unit tests (`pytest`).
+  - Verified clean frontend build (`npm run build`).
+  - Pushed to feature branch `feat/fix-dslr-photo-uploads`.

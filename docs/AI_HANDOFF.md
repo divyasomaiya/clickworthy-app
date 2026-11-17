@@ -11,8 +11,9 @@ This document records the exact state of the project, verified commits, active b
 | **Repository URL** | `https://github.com/divyasomaiya/clickworthy-app` |
 | **Foundation Branch** | `feat/pr-1-foundation-8729560166700180768` (Starting SHA: `cb2d9b8`) |
 | **Authentication Fixes Branch** | `feat/auth-verification-and-next16-fixes` (Commit SHA: `108137d`) |
-| **Dashboard Repairs Branch** | `feat/dashboard-repairs` (Current active feature branch) |
-| **Active PR Target** | `feat/auth-verification-and-next16-fixes` |
+| **Dashboard Repairs Branch** | `feat/dashboard-repairs` (Commit SHA: `be03edd`) |
+| **DSLR Photo Upload Branch** | `feat/fix-dslr-photo-uploads` (Current active feature branch) |
+| **Active PR Target** | `feat/dashboard-repairs` |
 
 ---
 
@@ -72,8 +73,8 @@ This document records the exact state of the project, verified commits, active b
 | **Back to Dashboard** | `/dashboard/create` | **PASS** | Routes back to `/dashboard`. |
 | **Back to Dashboard** | `/dashboard/events/[id]` | **PASS** | Routes back to `/dashboard`. |
 | **View Client Gallery** | `/dashboard/events/[id]` | **PASS** | Opens `/gallery/[id]` in new tab. |
-| **Select Photos / Upload** | `/dashboard/events/[id]` | **PASS** | Uploads multi-file JPEGs/PNGs to backend, triggers YuNet/SFace background indexing. |
-| **Photo Thumbnail Download** | `/dashboard/events/[id]` | **PASS** | Downloads photo from `/api/images/{photo_id}`. |
+| **Select Photos / Upload** | `/dashboard/events/[id]` | **PASS** | Bounded streaming up to 50 MB, per-file status list, supports full-res DSLR JPEGs & WhatsApp JPEGs. |
+| **Photo Thumbnail Download** | `/dashboard/events/[id]` | **PASS** | Downloads original full-resolution photo from `/api/images/{photo_id}`. |
 | **Search by Selfie** | `/gallery/[id]` | **PASS** | Uploads selfie, queries OpenCV + FAISS index, filters gallery to matching photos. |
 | **Show All / Reset Search** | `/gallery/[id]` | **PASS** | Clears facial search filter and re-displays full event album. |
 | **Photo Download** | `/gallery/[id]` | **PASS** | Downloads high-res photo. |
@@ -90,6 +91,7 @@ This document records the exact state of the project, verified commits, active b
 | Backend | `/health` check | **PASSED** | Returns `{"status": "healthy"}` |
 | Backend | `/docs` Swagger check | **PASSED** | HTTP 200 OK |
 | Backend | API Endpoint Verification Suite | **PASSED** (12/12) | Auth, events, photos, uploads, downloads verified |
+| Backend & AI | DSLR & Batch Upload Verification | **PASSED** (9/9) | WhatsApp (<1MB), DSLR (35MB), 5-image batch, 413 rejection, download parity |
 | Frontend | `npm run build` | **PASSED** | 0 TypeScript or lint errors, dynamic routes correct |
 | Frontend | Visual UI Navigation & Auth Redirect | **PASSED** | Inspected via visual browser subagent |
 | Security | JWT Secret Key Rotation | **PASSED** | Rotated locally without stdout or chat exposure |

@@ -23,6 +23,7 @@ Track project tasks, ownership, and status across AI sessions.
 | **Create Event Flow** | End-to-end form validation, Firestore document creation, redirection. | Branch `feat/dashboard-repairs` | 2026-11-18 |
 | **Event Photo Upload & Manage** | Multi-file photo upload with real-time progress, photo thumbnails with download. | Branch `feat/dashboard-repairs` | 2026-11-18 |
 | **Client Gallery & AI Search** | Fixed loading bug, added selfie search (`/api/search/`), full-screen modal, download buttons. | Branch `feat/dashboard-repairs` | 2026-11-18 |
+| **DSLR & Batch Photo Uploads** | 50 MB bounded chunk streaming, YuNet aspect scaling for 45MP images, per-file batch UI, exact original download parity. | Branch `feat/fix-dslr-photo-uploads` | 2026-11-18 |
 | **Backend Unit Tests** | 13/13 passing via `pytest -o pythonpath=.`. | Verified | 2026-11-18 |
 | **Production Build** | Clean `npm run build` with 8/8 routes compiled. | Verified | 2026-11-18 |
 

@@ -5,6 +5,13 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+interface UploadFileResult {
+  name: string;
+  sizeFormatted: string;
+  status: "pending" | "uploading" | "success" | "error";
+  detail?: string;
+}
+
 export default function EventDashboard({
   params,
 }: {
@@ -16,6 +23,7 @@ export default function EventDashboard({
   const [photos, setPhotos] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [uploadResults, setUploadResults] = useState<UploadFileResult[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loadingEvent, setLoadingEvent] = useState(true);
@@ -30,6 +38,13 @@ export default function EventDashboard({
   };
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   // Load event details and photos on mount
   useEffect(() => {
@@ -66,7 +81,7 @@ export default function EventDashboard({
           setPhotos(await photosRes.json());
         }
       } catch (e) {
-        setError("Failed to load event data.");
+        setError("Failed to load event data. Check backend connectivity.");
       } finally {
         setLoadingEvent(false);
       }
@@ -81,15 +96,33 @@ export default function EventDashboard({
     const headers = getHeaders();
     if (!headers) return;
 
+    const files = Array.from(e.target.files);
     setUploading(true);
     setError("");
     setSuccess("");
-    const files = Array.from(e.target.files);
-    let uploaded = 0;
-    let failed = 0;
 
-    for (const file of files) {
-      setUploadProgress(`Uploading ${uploaded + 1} of ${files.length}: ${file.name}`);
+    // Initialize per-file status list
+    const initialResults: UploadFileResult[] = files.map((f) => ({
+      name: f.name,
+      sizeFormatted: formatFileSize(f.size),
+      status: "pending",
+    }));
+    setUploadResults(initialResults);
+
+    let uploadedCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setUploadProgress(`Uploading ${i + 1} of ${files.length}: ${file.name} (${formatFileSize(file.size)})`);
+
+      // Update file status to uploading
+      setUploadResults((prev) =>
+        prev.map((item, idx) =>
+          idx === i ? { ...item, status: "uploading" } : item
+        )
+      );
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("event_id", id);
@@ -100,26 +133,61 @@ export default function EventDashboard({
           headers: { Authorization: headers.Authorization },
           body: formData,
         });
+
         if (res.ok) {
-          uploaded++;
+          uploadedCount++;
+          setUploadResults((prev) =>
+            prev.map((item, idx) =>
+              idx === i ? { ...item, status: "success" } : item
+            )
+          );
         } else {
-          failed++;
-          const err = await res.json().catch(() => null);
-          console.error(`Upload failed for ${file.name}:`, err?.detail);
+          failedCount++;
+          let errorDetail = `HTTP ${res.status}`;
+          if (res.status === 413) {
+            errorDetail = "File exceeds 50 MB limit";
+          } else if (res.status === 400) {
+            const err = await res.json().catch(() => null);
+            errorDetail = err?.detail || "Invalid image format";
+          } else if (res.status === 401) {
+            errorDetail = "Session expired — please re-login";
+          } else if (res.status === 403) {
+            errorDetail = "Unauthorized for this event";
+          } else if (res.status === 500) {
+            errorDetail = "Server storage error";
+          }
+
+          // Use console.warn instead of console.error to prevent triggering Next.js dev overlay
+          console.warn(`Upload rejected for ${file.name}: ${errorDetail}`);
+
+          setUploadResults((prev) =>
+            prev.map((item, idx) =>
+              idx === i ? { ...item, status: "error", detail: errorDetail } : item
+            )
+          );
         }
-      } catch (err) {
-        failed++;
-        console.error("Network error uploading", file.name);
+      } catch (networkErr) {
+        failedCount++;
+        const errorDetail = "Network error: Server unreachable or timeout";
+        console.warn(`Network error for ${file.name}:`, networkErr);
+
+        setUploadResults((prev) =>
+          prev.map((item, idx) =>
+            idx === i ? { ...item, status: "error", detail: errorDetail } : item
+          )
+        );
       }
     }
 
     setUploading(false);
     setUploadProgress("");
 
-    if (failed === 0) {
-      setSuccess(`✅ ${uploaded} photo${uploaded !== 1 ? "s" : ""} uploaded successfully!`);
+    if (failedCount === 0) {
+      setSuccess(`✅ All ${uploadedCount} photo${uploadedCount !== 1 ? "s" : ""} uploaded successfully!`);
+    } else if (uploadedCount > 0) {
+      setError(`⚠️ Partial upload: ${uploadedCount} succeeded, ${failedCount} failed. Review details below.`);
     } else {
-      setError(`${uploaded} uploaded, ${failed} failed. Check file size (max 10 MB) and format (JPEG/PNG).`);
+      setError(`❌ Upload failed: 0 of ${files.length} photos succeeded. Review details below.`);
     }
 
     // Refresh photo list
@@ -132,7 +200,7 @@ export default function EventDashboard({
       }
     } catch {}
 
-    // Reset file input so the same files can be re-selected if needed
+    // Reset file input so user can re-upload if needed
     e.target.value = "";
   };
 
@@ -148,19 +216,19 @@ export default function EventDashboard({
       <div className="mb-6">
         <Link
           href="/dashboard"
-          className="text-sm text-blue-600 hover:underline"
+          className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
         >
           ← Back to Dashboard
         </Link>
       </div>
 
-      <div className="flex justify-between items-start mb-8">
+      <div className="flex justify-between items-start mb-8 gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
             {event?.name || "Event Dashboard"}
           </h1>
           {event && (
-            <p className="text-slate-500 mt-1">
+            <p className="text-slate-600 dark:text-slate-400 mt-1 font-medium">
               {event.client_name} • {event.date}
               {event.storage_provider === "gdrive" && " • Google Drive"}
               {event.storage_provider === "local" && " • Local Storage"}
@@ -170,34 +238,35 @@ export default function EventDashboard({
         <Button
           onClick={() => window.open(`/gallery/${id}`, "_blank")}
           variant="outline"
+          className="border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold shadow-sm"
         >
           View Client Gallery
         </Button>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-red-700 dark:text-red-300 text-sm">
-          ❌ {error}
+        <div className="mb-6 p-4 bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 rounded-lg text-red-900 dark:text-red-200 text-sm font-medium">
+          {error}
         </div>
       )}
 
       {success && (
-        <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg text-green-700 dark:text-green-300 text-sm">
+        <div className="mb-6 p-4 bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-lg text-emerald-900 dark:text-emerald-200 text-sm font-medium">
           {success}
         </div>
       )}
 
       {/* Upload section */}
-      <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-12 text-center mb-8">
-        <h3 className="text-lg font-medium mb-2 text-slate-900 dark:text-white">
+      <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-12 text-center mb-8 bg-slate-50/50 dark:bg-slate-900/30">
+        <h3 className="text-lg font-semibold mb-2 text-slate-900 dark:text-white">
           Upload Event Photos
         </h3>
-        <p className="text-slate-500 mb-6">
-          JPEG and PNG files up to 10 MB each. AI face indexing runs automatically.
+        <p className="text-slate-600 dark:text-slate-400 mb-6 text-sm">
+          Supports original full-resolution DSLR JPEGs and PNGs up to 50 MB each.
         </p>
 
         {uploadProgress && (
-          <p className="text-blue-600 mb-4 text-sm font-medium animate-pulse">
+          <p className="text-blue-600 dark:text-blue-400 mb-4 text-sm font-medium animate-pulse">
             {uploadProgress}
           </p>
         )}
@@ -205,24 +274,71 @@ export default function EventDashboard({
         <input
           type="file"
           multiple
-          accept="image/jpeg,image/png"
+          accept="image/jpeg,image/png,image/jpg"
           className="hidden"
           id="photo-upload"
           onChange={handleUpload}
           disabled={uploading}
         />
         <label htmlFor="photo-upload">
-          <Button asChild disabled={uploading}>
+          <Button asChild disabled={uploading} className="cursor-pointer shadow">
             <span>
-              {uploading ? "Uploading…" : "Select Photos"}
+              {uploading ? "Uploading Batch…" : "Select Photos"}
             </span>
           </Button>
         </label>
       </div>
 
+      {/* Per-file Upload Breakdown */}
+      {uploadResults.length > 0 && (
+        <div className="mb-8 border border-slate-200 dark:border-slate-800 rounded-lg p-4 bg-white dark:bg-slate-900 shadow-sm">
+          <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-3">
+            Batch Upload Status ({uploadResults.filter((r) => r.status === "success").length} / {uploadResults.length} Succeeded)
+          </h4>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {uploadResults.map((result, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between text-xs p-2 rounded bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800"
+              >
+                <div className="flex items-center gap-2 truncate mr-3">
+                  <span className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                    {result.name}
+                  </span>
+                  <span className="text-slate-400 shrink-0">
+                    ({result.sizeFormatted})
+                  </span>
+                </div>
+
+                <div className="shrink-0 flex items-center gap-2">
+                  {result.status === "pending" && (
+                    <span className="text-slate-400">Queued</span>
+                  )}
+                  {result.status === "uploading" && (
+                    <span className="text-blue-600 dark:text-blue-400 font-medium animate-pulse">
+                      Uploading…
+                    </span>
+                  )}
+                  {result.status === "success" && (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      ✓ Uploaded
+                    </span>
+                  )}
+                  {result.status === "error" && (
+                    <span className="text-red-600 dark:text-red-400 font-semibold">
+                      ✕ {result.detail || "Failed"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Photos list */}
       <div>
-        <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
+        <h3 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">
           Uploaded Photos ({photos.length})
         </h3>
         {photos.length === 0 ? (
@@ -284,8 +400,8 @@ function PhotoThumbnail({
 
   if (failed) {
     return (
-      <div className="aspect-square bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center text-red-400 text-xs">
-        Failed
+      <div className="aspect-square bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center text-red-400 text-xs font-medium">
+        Failed to load
       </div>
     );
   }
@@ -307,7 +423,7 @@ function PhotoThumbnail({
         <a
           href={src}
           download={`photo-${photoId}.jpg`}
-          className="text-xs bg-white text-slate-900 font-medium px-2.5 py-1 rounded shadow hover:bg-slate-100"
+          className="text-xs bg-white text-slate-900 font-semibold px-2.5 py-1 rounded shadow hover:bg-slate-100"
         >
           Download
         </a>
