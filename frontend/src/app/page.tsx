@@ -4,10 +4,10 @@ import { Camera, Image as ImageIcon, Zap, Lock } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-white">
       {/* Navigation */}
       <nav className="flex items-center justify-between p-6 max-w-7xl mx-auto">
-        <div className="text-2xl font-bold tracking-tighter flex items-center gap-2">
+        <div className="text-2xl font-bold tracking-tighter flex items-center gap-2 text-slate-900 dark:text-white">
           <Camera className="w-8 h-8" />
           LensAI
         </div>
@@ -23,7 +23,7 @@ export default function Home() {
 
       {/* Hero Section */}
       <main className="max-w-7xl mx-auto px-6 py-24 text-center">
-        <h1 className="text-6xl font-extrabold tracking-tight mb-8 max-w-4xl mx-auto leading-tight">
+        <h1 className="text-6xl font-extrabold tracking-tight mb-8 max-w-4xl mx-auto leading-tight text-slate-900 dark:text-white">
           The AI-Powered Photo Platform for Event Photographers
         </h1>
         <p className="text-xl text-slate-500 mb-12 max-w-2xl mx-auto">
@@ -42,17 +42,17 @@ export default function Home() {
         <div className="grid md:grid-cols-3 gap-8 mt-32 text-left">
           <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900">
             <Zap className="w-10 h-10 mb-4 text-blue-500" />
-            <h3 className="text-xl font-bold mb-2">Instant Face Recognition</h3>
+            <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">Instant Face Recognition</h3>
             <p className="text-slate-500">Advanced AI detects multiple faces even in large group photos and difficult lighting.</p>
           </div>
           <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900">
             <Lock className="w-10 h-10 mb-4 text-green-500" />
-            <h3 className="text-xl font-bold mb-2">Private & Secure</h3>
+            <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">Private &amp; Secure</h3>
             <p className="text-slate-500">Photos sync directly to your secure Google Drive. Clients only see photos they are in.</p>
           </div>
           <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900">
             <ImageIcon className="w-10 h-10 mb-4 text-purple-500" />
-            <h3 className="text-xl font-bold mb-2">Stunning Galleries</h3>
+            <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">Stunning Galleries</h3>
             <p className="text-slate-500">Beautiful, mobile-optimized masonry galleries that your clients will love to share.</p>
           </div>
         </div>

@@ -15,9 +15,6 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download InsightFace buffalo_l model during build
-RUN python -c "from insightface.app import FaceAnalysis; FaceAnalysis(name='buffalo_l')"
-
 # Copy the current directory contents into the container
 COPY . .
 

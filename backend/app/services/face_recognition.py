@@ -2,68 +2,106 @@ import os
 import cv2
 import numpy as np
 
-try:
-    import insightface
-    from insightface.app import FaceAnalysis
-    HAS_INSIGHTFACE = True
-except ImportError:
-    HAS_INSIGHTFACE = False
-
 class FaceRecognitionService:
     def __init__(self):
-        self.mock_mode = not HAS_INSIGHTFACE
-        if not self.mock_mode:
-            try:
-                # We initialize the model. In production, 'buffalo_l' should be pre-downloaded.
-                self.app = FaceAnalysis(name='buffalo_l', root='~/.insightface/models')
-                # Setting ctx_id=0 enables GPU if available, else ctx_id=-1 for CPU
-                self.app.prepare(ctx_id=-1, det_size=(640, 640))
-            except Exception as e:
-                print(f"Error initializing InsightFace: {e}. Falling back to mock mode.")
-                self.mock_mode = True
+        # Paths to the downloaded ONNX models
+        yunet_path = os.path.join(os.path.dirname(__file__), '../../models/face_detection_yunet_2023mar.onnx')
+        sface_path = os.path.join(os.path.dirname(__file__), '../../models/face_recognition_sface_2021dec.onnx')
 
-        if self.mock_mode:
-            print("Running FaceRecognitionService in Mock Mode (No C++ compiler/InsightFace required)")
+        self.available = os.path.exists(yunet_path) and os.path.exists(sface_path)
+
+        if self.available:
+            self.detector = cv2.FaceDetectorYN.create(
+                model=yunet_path,
+                config="",
+                input_size=(320, 320),
+                score_threshold=0.8,
+                nms_threshold=0.3,
+                top_k=5000
+            )
+            self.recognizer = cv2.FaceRecognizerSF.create(
+                model=sface_path,
+                config=""
+            )
+        else:
+            print(f"Warning: ONNX models not found. FaceRecognitionService is disabled. Paths expected: {yunet_path}")
 
     def process_image(self, file_path: str):
-        """Processes an image, detecting faces and generating embeddings."""
-        if self.mock_mode:
-            if not os.path.exists(file_path):
-                raise ValueError("Could not read image file.")
+        """Processes an image, detecting faces and generating embeddings.
+        Supports high-resolution DSLR images without memory exhaustion."""
+        if not self.available:
+            return []
 
-            # Generate a reproducible embedding based on the filename/size hash
-            import hashlib
-            basename = os.path.basename(file_path)
-            file_hash = hashlib.md5(basename.encode('utf-8')).hexdigest()
-            # Seed numpy random generator with the hash
-            seed = int(file_hash, 16) % (2**32)
-            rng = np.random.default_rng(seed)
-
-            # Generate a random 512-dimensional vector normalized to unit length
-            embedding = rng.standard_normal(512)
-            embedding = embedding / np.linalg.norm(embedding)
-
-            return [{
-                "bbox": [50.0, 50.0, 200.0, 200.0],
-                "kps": [[75.0, 100.0], [125.0, 100.0], [100.0, 125.0], [80.0, 150.0], [120.0, 150.0]],
-                "det_score": 0.99,
-                "embedding": embedding.tolist()
-            }]
+        if not os.path.exists(file_path):
+            raise ValueError("Could not read image file.")
 
         img = cv2.imread(file_path)
         if img is None:
-            raise ValueError("Could not read image file.")
+            # Fallback for paths with special characters on Windows
+            try:
+                with open(file_path, "rb") as f:
+                    bytes_data = bytearray(f.read())
+                nparr = np.asarray(bytes_data, dtype=np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except Exception:
+                img = None
 
-        faces = self.app.get(img)
+        if img is None:
+            raise ValueError("Could not decode image file.")
+
+        orig_h, orig_w = img.shape[:2]
+
+        # For large DSLR images, scale down detection frame to a max dimension of 1920
+        # while keeping the original full-resolution image for feature alignment
+        max_dim = 1920
+        scale = 1.0
+        if max(orig_h, orig_w) > max_dim:
+            scale = max_dim / float(max(orig_h, orig_w))
+            detect_w = max(1, int(orig_w * scale))
+            detect_h = max(1, int(orig_h * scale))
+            detect_img = cv2.resize(img, (detect_w, detect_h), interpolation=cv2.INTER_AREA)
+        else:
+            detect_w = orig_w
+            detect_h = orig_h
+            detect_img = img
+
+        self.detector.setInputSize((detect_w, detect_h))
+        _, faces = self.detector.detect(detect_img)
 
         results = []
-        for face in faces:
-            results.append({
-                "bbox": face.bbox.tolist(),
-                "kps": face.kps.tolist(),
-                "det_score": float(face.det_score),
-                "embedding": face.embedding.tolist()
-            })
+        if faces is not None:
+            for face in faces:
+                # face format: [x, y, w, h, x_re, y_re, x_le, y_le, x_nt, y_nt, x_rcm, y_rcm, x_lcm, y_lcm, score]
+                face_orig = face.copy()
+                if scale != 1.0:
+                    # Map bounding box back to original coordinates
+                    face_orig[0:4] = face_orig[0:4] / scale
+                    # Map landmarks back to original coordinates
+                    face_orig[4:14] = face_orig[4:14] / scale
+
+                bbox = face_orig[0:4].tolist()
+                score = float(face_orig[-1])
+
+                # Align the face using the recognizer from original image
+                try:
+                    aligned_face = self.recognizer.alignCrop(img, face_orig)
+                    embedding = self.recognizer.feature(aligned_face)
+
+                    # Normalize SFace 128-dimensional embedding
+                    embedding = embedding[0]
+                    norm = np.linalg.norm(embedding)
+                    if norm > 0:
+                        embedding = embedding / norm
+
+                    results.append({
+                        "bbox": bbox,
+                        "kps": face_orig[4:14].reshape(5, 2).tolist(),
+                        "det_score": score,
+                        "embedding": embedding.tolist()
+                    })
+                except Exception as crop_err:
+                    print(f"Warning: Failed to align/recognize face: {crop_err}")
+                    continue
 
         return results
 

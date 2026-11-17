@@ -1,10 +1,20 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    GOOGLE_APPLICATION_CREDENTIALS: str = "service_account.json"
     FIREBASE_CREDENTIALS: str = "firebase_credentials.json"
-    DRIVE_ROOT_FOLDER_ID: str = "" # The root folder in your Drive where events will be stored
-    JWT_SECRET_KEY: str = "your-super-secret-key-for-dev"
+    FIREBASE_PROJECT_ID: str = "clickworthy-app"
+    JWT_SECRET_KEY: str
+    MAX_UPLOAD_SIZE_MB: int = 50
+
+    # Storage paths
+    LOCAL_STORAGE_PATH: str = "backend_uploads"
+    TEMP_UPLOAD_PATH: str = "temp_uploads"
+
+    # OAuth configuration for Google Drive BYOS
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/gdrive/callback"
+    ENCRYPTION_KEY: str = "" # Used to encrypt refresh tokens at rest
 
     class Config:
         env_file = ".env"

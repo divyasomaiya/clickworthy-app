@@ -4,6 +4,7 @@
 *.env
 *.env.local
 backend/.env
+backend/firebase_credentials.json
 frontend/.env.local
 
 # Next.js
@@ -11,6 +12,10 @@ frontend/.next/
 frontend/node_modules/
 
 # Python
+.venv/
+venv/
+backend/.venv/
+backend/venv/
 backend/__pycache__/
 backend/app/__pycache__/
 backend/app/*/__pycache__/
@@ -20,3 +25,12 @@ backend/temp_uploads/
 backend/app/faces.index
 backend/app/faces_map.json
 .insightface/
+*.pyc
+__pycache__/
+backend/local_db.json
+backend/backend_uploads/
+backend/temp_search/
+temp_uploads/
+temp_search/
+frontend.log
+backend.log

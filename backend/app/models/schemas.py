@@ -4,12 +4,16 @@ class EventCreate(BaseModel):
     name: str
     client_name: str
     date: str
-    photographer_id: str
+    # photographer_id will be derived from auth token
+    expiry_date: str | None = None
+    is_private: bool = True
 
 class EventResponse(BaseModel):
     event_id: str
     name: str
     drive_folder_id: str
+    photographer_id: str
+    expiry_date: str | None = None
 
 class SearchRequest(BaseModel):
     event_id: str
