@@ -309,3 +309,128 @@ def test_gdrive_disconnect(mock_post):
     # but the point is we test the mock DB update operation handling DELETE_FIELD string.
     assert res.status_code == 200
     assert res.json()["message"] == "Google Drive disconnected"
+
+
+def test_search_duo_face_matching_modes():
+    """Verify two-person 'together', 'either', and 'single' search modes."""
+    import numpy as np
+    from app.services.vector_store import faiss_index
+    from app.services.firebase import firebase_service
+
+    token = get_test_token("photographer-duo-test")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create test event
+    ev_res = client.post("/api/events/", json={
+        "name": "Duo Test Event",
+        "client_name": "Test Client",
+        "date": "2026-11-18",
+        "is_private": True
+    }, headers=headers)
+    assert ev_res.status_code == 200
+    event_id = ev_res.json()["event_id"]
+
+    # 2. Add embeddings to FAISS and metadata to Firestore
+    # Person A vector: dimension 0
+    vec_a = np.zeros(128, dtype=np.float32)
+    vec_a[0] = 1.0
+    # Person B vector: dimension 1
+    vec_b = np.zeros(128, dtype=np.float32)
+    vec_b[1] = 1.0
+
+    db = firebase_service.get_db()
+
+    # Photo 1: Contains BOTH Person A and Person B (2 distinct faces)
+    pid_together = "photo_both_a_and_b"
+    faiss_index.add_embedding(vec_a, f"{pid_together}_face_0")
+    faiss_index.add_embedding(vec_b, f"{pid_together}_face_1")
+    db.collection("images").document(pid_together).set({"event_id": event_id, "drive_file_id": "d1"})
+    db.collection("faces").document(f"{pid_together}_face_0").set({"event_id": event_id, "photo_id": pid_together, "bbox": [10, 10, 50, 50], "det_score": 0.95})
+    db.collection("faces").document(f"{pid_together}_face_1").set({"event_id": event_id, "photo_id": pid_together, "bbox": [100, 10, 50, 50], "det_score": 0.94})
+
+    # Photo 2: Contains ONLY Person A
+    pid_a_only = "photo_person_a_only"
+    faiss_index.add_embedding(vec_a, f"{pid_a_only}_face_0")
+    db.collection("images").document(pid_a_only).set({"event_id": event_id, "drive_file_id": "d2"})
+    db.collection("faces").document(f"{pid_a_only}_face_0").set({"event_id": event_id, "photo_id": pid_a_only, "bbox": [10, 10, 50, 50], "det_score": 0.95})
+
+    # Photo 3: Contains ONLY Person B
+    pid_b_only = "photo_person_b_only"
+    faiss_index.add_embedding(vec_b, f"{pid_b_only}_face_0")
+    db.collection("images").document(pid_b_only).set({"event_id": event_id, "drive_file_id": "d3"})
+    db.collection("faces").document(f"{pid_b_only}_face_0").set({"event_id": event_id, "photo_id": pid_b_only, "bbox": [10, 10, 50, 50], "det_score": 0.95})
+
+    # Mock face_service.process_image to return deterministic embeddings
+    with patch("app.api.endpoints.search.face_service.process_image") as mock_proc:
+        duo_mode_flag = {"two_faces": False}
+        def side_effect(path):
+            if duo_mode_flag["two_faces"]:
+                return [
+                    {"bbox": [0, 0, 10, 10], "det_score": 0.98, "embedding": vec_a.tolist()},
+                    {"bbox": [20, 20, 10, 10], "det_score": 0.97, "embedding": vec_b.tolist()}
+                ]
+            elif "_b.tmp" in path or "person_b" in path:
+                return [{"bbox": [0, 0, 10, 10], "det_score": 0.98, "embedding": vec_b.tolist()}]
+            else:
+                return [{"bbox": [0, 0, 10, 10], "det_score": 0.98, "embedding": vec_a.tolist()}]
+
+        mock_proc.side_effect = side_effect
+
+        dummy_img = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xFF\xDB\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xFF\xC0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xFF\xC4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xFF\xDA\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xFF\xD9"
+
+        # Test A: Find Us Together with 2 separate files
+        res_together = client.post(
+            "/api/search/",
+            data={"event_id": event_id, "mode": "together"},
+            files={
+                "file": ("person_a.jpg", dummy_img, "image/jpeg"),
+                "file_b": ("person_b.jpg", dummy_img, "image/jpeg")
+            },
+            headers=headers
+        )
+        assert res_together.status_code == 200
+        matches_together = res_together.json()["matches"]
+        assert len(matches_together) == 1
+        assert matches_together[0]["photo_id"] == pid_together
+        assert matches_together[0]["match_type"] == "together"
+
+        # Test B: Either Person mode
+        res_either = client.post(
+            "/api/search/",
+            data={"event_id": event_id, "mode": "either"},
+            files={
+                "file": ("person_a.jpg", dummy_img, "image/jpeg"),
+                "file_b": ("person_b.jpg", dummy_img, "image/jpeg")
+            },
+            headers=headers
+        )
+        assert res_either.status_code == 200
+        matches_either = res_either.json()["matches"]
+        pids_either = set(m["photo_id"] for m in matches_either)
+        assert pids_either == {pid_together, pid_a_only, pid_b_only}
+
+        # Test C: Single photo duo search (1 photo with 2 faces)
+        duo_mode_flag["two_faces"] = True
+        res_single_duo = client.post(
+            "/api/search/",
+            data={"event_id": event_id, "mode": "together"},
+            files={"file": ("duo_single_photo.jpg", dummy_img, "image/jpeg")},
+            headers=headers
+        )
+        duo_mode_flag["two_faces"] = False
+        assert res_single_duo.status_code == 200
+        matches_single_duo = res_single_duo.json()["matches"]
+        assert len(matches_single_duo) == 1
+        assert matches_single_duo[0]["photo_id"] == pid_together
+
+        # Test D: Duo search with only 1 detected face (graceful guidance message)
+        mock_proc.side_effect = lambda p: [{"bbox": [0, 0, 10, 10], "det_score": 0.9, "embedding": vec_a.tolist()}]
+        res_insufficient = client.post(
+            "/api/search/",
+            data={"event_id": event_id, "mode": "together"},
+            files={"file": ("single_face.jpg", dummy_img, "image/jpeg")},
+            headers=headers
+        )
+        assert res_insufficient.status_code == 200
+        assert res_insufficient.json()["matches"] == []
+        assert "Only 1 face was detected" in res_insufficient.json()["message"]

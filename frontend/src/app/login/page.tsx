@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { auth, googleProvider } from "@/lib/firebase";
+import { getOrRefreshSession } from "@/lib/auth-session";
 import { signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { AlertCircle, LogIn, ExternalLink } from "lucide-react";
+import { AlertCircle, ExternalLink, RefreshCw } from "lucide-react";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const [checkingExistingSession, setCheckingExistingSession] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showRedirectHelp, setShowRedirectHelp] = useState(false);
   const router = useRouter();
@@ -19,9 +21,9 @@ export default function LoginPage() {
     const res = await fetch(`${apiUrl}/api/auth/login`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ id_token: idToken })
+      body: JSON.stringify({ id_token: idToken }),
     });
 
     if (!res.ok) {
@@ -44,11 +46,11 @@ export default function LoginPage() {
 
   const mapAuthError = (error: any) => {
     const code = error?.code || "";
-    console.error("Firebase Auth Error:", code, error);
+    console.warn("Firebase Auth Notice:", code, error);
 
     if (code === "auth/popup-closed-by-user") {
       setErrorMessage(
-        "The Google sign-in popup was closed before completing. If it got stuck on 'clickworthy-app.firebaseapp.com/__/auth/handler', your browser may be blocking third-party storage or Google sign-in might not be enabled in your Firebase Console. Please try 'Sign In with Redirect' below."
+        "The Google sign-in popup was closed before completing. If it got stuck on the auth handler, your browser may be partitioning storage. Please try 'Sign In with Redirect' below."
       );
       setShowRedirectHelp(true);
     } else if (code === "auth/popup-blocked") {
@@ -71,31 +73,44 @@ export default function LoginPage() {
     }
   };
 
-  // Handle getRedirectResult on page mount (for signInWithRedirect flow)
+  // Check for existing persistent session or incoming redirect result on mount
   useEffect(() => {
     let active = true;
-    const checkRedirect = async () => {
+
+    const checkSession = async () => {
+      // 1. Check if redirect result is pending
       try {
-        const result = await getRedirectResult(auth);
-        if (result && active) {
+        const redirectResult = await getRedirectResult(auth);
+        if (redirectResult && active) {
           setLoading(true);
-          const idToken = await result.user.getIdToken();
+          const idToken = await redirectResult.user.getIdToken();
           await exchangeTokenAndRedirect(idToken);
+          return;
         }
       } catch (err: any) {
-        if (active) {
-          mapAuthError(err);
+        if (active) mapAuthError(err);
+      }
+
+      // 2. Check if a valid session already exists or can be auto-recovered
+      try {
+        const validToken = await getOrRefreshSession();
+        if (validToken && active) {
+          router.push("/dashboard");
+          return;
         }
-      } finally {
-        if (active) setLoading(false);
+      } catch (_) {}
+
+      if (active) {
+        setCheckingExistingSession(false);
       }
     };
 
-    checkRedirect();
+    checkSession();
+
     return () => {
       active = false;
     };
-  }, []);
+  }, [router]);
 
   const handlePopupLogin = async () => {
     setLoading(true);
@@ -122,6 +137,17 @@ export default function LoginPage() {
     }
   };
 
+  if (checkingExistingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
+          <p className="text-sm font-medium">Verifying session…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
       <div className="max-w-md w-full bg-white dark:bg-slate-900 p-8 rounded-xl shadow-lg text-center border border-slate-200 dark:border-slate-800">
@@ -141,7 +167,7 @@ export default function LoginPage() {
 
         <div className="space-y-3">
           <Button
-            className="w-full h-12 text-base font-medium flex items-center justify-center gap-3 bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm"
+            className="w-full h-12 text-base font-medium flex items-center justify-center gap-3 bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm cursor-pointer"
             onClick={handlePopupLogin}
             disabled={loading}
           >
@@ -168,7 +194,7 @@ export default function LoginPage() {
 
           <Button
             variant="outline"
-            className="w-full h-11 text-sm font-normal flex items-center justify-center gap-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="w-full h-11 text-sm font-normal flex items-center justify-center gap-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
             onClick={handleRedirectLogin}
             disabled={loading}
           >
