@@ -4,6 +4,7 @@ import { useState, useEffect, use } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getOrRefreshSession } from "@/lib/auth-session";
 
 interface UploadFileResult {
   name: string;
@@ -28,8 +29,8 @@ export default function EventDashboard({
   const [success, setSuccess] = useState("");
   const [loadingEvent, setLoadingEvent] = useState(true);
 
-  const getHeaders = () => {
-    const token = localStorage.getItem("access_token");
+  const getHeaders = async () => {
+    const token = await getOrRefreshSession();
     if (!token) {
       router.push("/login");
       return null;
@@ -49,15 +50,17 @@ export default function EventDashboard({
   // Load event details and photos on mount
   useEffect(() => {
     const fetchEvent = async () => {
-      const headers = getHeaders();
+      const headers = await getHeaders();
       if (!headers) return;
 
       try {
         const res = await fetch(`${apiUrl}/api/events/${id}`, { headers });
         if (res.status === 401) {
-          localStorage.removeItem("access_token");
-          router.push("/login");
-          return;
+          const freshToken = await getOrRefreshSession();
+          if (!freshToken) {
+            router.push("/login");
+            return;
+          }
         }
         if (res.status === 404) {
           setError("Event not found.");
@@ -93,7 +96,7 @@ export default function EventDashboard({
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
 
-    const headers = getHeaders();
+    const headers = await getHeaders();
     if (!headers) return;
 
     const files = Array.from(e.target.files);
@@ -374,7 +377,7 @@ function PhotoThumbnail({
   useEffect(() => {
     let revoke: string | null = null;
     const load = async () => {
-      const token = localStorage.getItem("access_token");
+      const token = await getOrRefreshSession();
       if (!token) return;
       try {
         const res = await fetch(`${apiUrl}/api/images/${photoId}`, {

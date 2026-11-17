@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getOrRefreshSession } from "@/lib/auth-session";
 
 export default function CreateEvent() {
   const [name, setName] = useState("");
@@ -20,7 +21,7 @@ export default function CreateEvent() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem("access_token");
+      const token = await getOrRefreshSession();
       if (!token) {
         router.push("/login");
         return;
@@ -42,8 +43,12 @@ export default function CreateEvent() {
       });
 
       if (res.status === 401) {
-        localStorage.removeItem("access_token");
-        router.push("/login");
+        const freshToken = await getOrRefreshSession();
+        if (!freshToken) {
+          router.push("/login");
+          return;
+        }
+        setError("Session renewed — please click Create again.");
         return;
       }
 

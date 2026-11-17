@@ -12,8 +12,9 @@ This document records the exact state of the project, verified commits, active b
 | **Foundation Branch** | `feat/pr-1-foundation-8729560166700180768` (Starting SHA: `cb2d9b8`) |
 | **Authentication Fixes Branch** | `feat/auth-verification-and-next16-fixes` (Commit SHA: `108137d`) |
 | **Dashboard Repairs Branch** | `feat/dashboard-repairs` (Commit SHA: `be03edd`) |
-| **DSLR Photo Upload Branch** | `feat/fix-dslr-photo-uploads` (Current active feature branch) |
-| **Active PR Target** | `feat/dashboard-repairs` |
+| **DSLR Photo Upload Branch** | `feat/fix-dslr-photo-uploads` (Commit SHA: `fd1e35d`) |
+| **Camera & Duo Search Branch** | `feat/camera-duo-search-and-session-persistence` (Current active feature branch) |
+| **Active PR Target** | `feat/fix-dslr-photo-uploads` |
 
 ---
 
@@ -87,12 +88,14 @@ This document records the exact state of the project, verified commits, active b
 
 | Scope | Test | Result | Notes |
 | :--- | :--- | :--- | :--- |
-| Backend | `pytest` test suite | **PASSED** (13/13) | AI integration & core endpoints verified |
+| Backend | `pytest` test suite | **PASSED** (14/14) | AI integration, core endpoints & duo search verified |
 | Backend | `/health` check | **PASSED** | Returns `{"status": "healthy"}` |
 | Backend | `/docs` Swagger check | **PASSED** | HTTP 200 OK |
 | Backend | API Endpoint Verification Suite | **PASSED** (12/12) | Auth, events, photos, uploads, downloads verified |
 | Backend & AI | DSLR & Batch Upload Verification | **PASSED** (9/9) | WhatsApp (<1MB), DSLR (35MB), 5-image batch, 413 rejection, download parity |
-| Frontend | `npm run build` | **PASSED** | 0 TypeScript or lint errors, dynamic routes correct |
+| Backend & AI | Duo Face Search API (Together & Either) | **PASSED** | Single-photo (>=2 faces) and dual-photo duo search, distinct face constraint |
+| Frontend | `npm run build` | **PASSED** | 0 TypeScript or lint errors, dynamic routes & camera modal compiled |
+| Frontend | Session Persistence across refresh/tab | **PASSED** | Silent `authStateReady()` token recovery without Google popup |
 | Frontend | Visual UI Navigation & Auth Redirect | **PASSED** | Inspected via visual browser subagent |
 | Security | JWT Secret Key Rotation | **PASSED** | Rotated locally without stdout or chat exposure |
 | Security | Credentials Git Exclusion | **PASSED** | `backend/.env`, `firebase_credentials.json`, `frontend/.env.local` strictly untracked |
@@ -101,6 +104,7 @@ This document records the exact state of the project, verified commits, active b
 
 ## 5. Next Immediate Action
 
-1. Commit and push the final verified dashboard repairs to `feat/dashboard-repairs`.
-2. Open Pull Request on GitHub against `feat/auth-verification-and-next16-fixes`.
-3. Proceed to staging deployment planning (Vercel for frontend, Render/Cloud Run for FastAPI backend).
+1. Commit and push the final verified camera, duo search, and session persistence fixes to `feat/camera-duo-search-and-session-persistence`.
+2. Open Pull Request on GitHub against `feat/fix-dslr-photo-uploads`.
+3. Test live webcam / mobile selfie in actual browser environment.
+4. Proceed to staging deployment planning (Vercel for frontend, Render/Cloud Run for FastAPI backend).

@@ -117,3 +117,30 @@ This file records chronologically ordered, concise entries for key decisions, qu
   - Verified 13/13 passing backend unit tests (`pytest`).
   - Verified clean frontend build (`npm run build`).
   - Pushed to feature branch `feat/fix-dslr-photo-uploads`.
+
+---
+
+### [2026-11-18 02:45] Antigravity — Camera Selfie Capture, Duo Face Search & Session Persistence
+- **Agent**: Antigravity
+- **Actions & Findings**:
+  - **Direct Camera Capture**:
+    - Implemented in-browser webcam and mobile camera capture modal on `/gallery/[id]`.
+    - Integrated `navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })` with live video preview, canvas freeze snapshot, retake, and selection.
+    - Gracefully handles camera permission denial or unsuitability with actionable fallback to device file upload.
+    - Guaranteed camera hardware release by systematically stopping video tracks upon capture modal close, completion, or component unmount.
+  - **Two-Person / Duo Face Search**:
+    - Added user toggle between single-person search and duo face search ("Find Us Together").
+    - Supported two reference inputs: single photo containing both faces or two separate photos (Person A & Person B).
+    - Added matching criteria toggle: "Both Together" (requires both individuals in the same event photo) vs. "Either Person" (returns photos containing either individual).
+    - Enforced distinct face matching ($f_a \neq f_b$) in the backend FAISS index so a single face cannot satisfy both personas.
+    - Cleaned up temporary reference images immediately after embedding extraction.
+  - **Session Persistence**:
+    - Created `frontend/src/lib/auth-session.ts` featuring `getOrRefreshSession()` using Firebase `auth.authStateReady()`.
+    - Fixed the issue where page refreshes and new tabs prompted a Google login popup despite active Firebase sessions.
+    - Added auto-session detection on `/login`, automatically redirecting authenticated users to `/dashboard`.
+    - Integrated session recovery into `/dashboard`, `/dashboard/create`, and `/dashboard/events/[id]`.
+    - Ensured explicit Sign Out (`logoutSession`) thoroughly terminates both Firebase and backend JWT sessions.
+  - **Verification**:
+    - Backend unit tests: 14/14 passed via `pytest -o pythonpath=.` (including new duo face search tests).
+    - Frontend production build: `npm run build` completed with 0 errors across all routes.
+    - Committed and pushed to `feat/camera-duo-search-and-session-persistence`.

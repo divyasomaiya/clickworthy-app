@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getOrRefreshSession, logoutSession } from "@/lib/auth-session";
 
 export default function DashboardPage() {
   const [events, setEvents] = useState([]);
@@ -13,36 +14,40 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    let active = true;
 
     const fetchData = async () => {
       try {
+        const token = await getOrRefreshSession();
+        if (!token) {
+          if (active) router.push("/login");
+          return;
+        }
+
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const headers = { Authorization: `Bearer ${token}` };
 
         const userRes = await fetch(`${apiUrl}/api/auth/me`, { headers });
-        if (userRes.status === 401) {
-          // Token expired or rotated — re-login required
-          localStorage.removeItem("access_token");
-          router.push("/login");
-          return;
+        if (userRes.ok && active) {
+          setUser(await userRes.json());
         }
-        if (userRes.ok) setUser(await userRes.json());
 
         const eventsRes = await fetch(`${apiUrl}/api/events/me`, { headers });
-        if (eventsRes.ok) setEvents(await eventsRes.json());
+        if (eventsRes.ok && active) {
+          setEvents(await eventsRes.json());
+        }
       } catch (e) {
-        console.error("Failed to fetch data", e);
+        console.warn("Failed to fetch dashboard data", e);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     fetchData();
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   const handleGDriveConnect = async () => {
@@ -88,8 +93,8 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
+  const handleLogout = async () => {
+    await logoutSession();
     router.push("/login");
   };
 

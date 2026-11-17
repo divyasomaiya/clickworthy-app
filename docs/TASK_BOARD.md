@@ -24,8 +24,11 @@ Track project tasks, ownership, and status across AI sessions.
 | **Event Photo Upload & Manage** | Multi-file photo upload with real-time progress, photo thumbnails with download. | Branch `feat/dashboard-repairs` | 2026-11-18 |
 | **Client Gallery & AI Search** | Fixed loading bug, added selfie search (`/api/search/`), full-screen modal, download buttons. | Branch `feat/dashboard-repairs` | 2026-11-18 |
 | **DSLR & Batch Photo Uploads** | 50 MB bounded chunk streaming, YuNet aspect scaling for 45MP images, per-file batch UI, exact original download parity. | Branch `feat/fix-dslr-photo-uploads` | 2026-11-18 |
-| **Backend Unit Tests** | 13/13 passing via `pytest -o pythonpath=.`. | Verified | 2026-11-18 |
+| **Backend Unit Tests** | 14/14 passing via `pytest -o pythonpath=.` (including duo face matching). | Verified | 2026-11-18 |
 | **Production Build** | Clean `npm run build` with 8/8 routes compiled. | Verified | 2026-11-18 |
+| **Direct Camera Capture** | Live webcam / mobile camera capture with preview, retake, and track stop in client gallery. | Branch `feat/camera-duo-search-and-session-persistence` | 2026-11-18 |
+| **Two-Person / Duo Face Search** | Duo search supporting both "Together" (distinct faces) and "Either" modes, dual or single reference photo. | Branch `feat/camera-duo-search-and-session-persistence` | 2026-11-18 |
+| **Session Persistence** | Automatic silent session renewal via `authStateReady()` preventing redundant Google login popups on reload/tab open. | Branch `feat/camera-duo-search-and-session-persistence` | 2026-11-18 |
 
 ---
 
@@ -33,7 +36,7 @@ Track project tasks, ownership, and status across AI sessions.
 
 | Task | Description | Assigned / Notes |
 | :--- | :--- | :--- |
-| **Dashboard Repairs PR** | Pushing verified changes to `feat/dashboard-repairs` and opening PR against `feat/auth-verification-and-next16-fixes`. | Antigravity |
+| **Camera & Duo Search PR** | Pushing verified changes to `feat/camera-duo-search-and-session-persistence` and opening PR against `feat/fix-dslr-photo-uploads`. | Antigravity |
 
 ---
 
