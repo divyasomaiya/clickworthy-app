@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, use } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
 import Image from "next/image";
 
 import { useEffect } from "react";
 
-export default function ClientGallery({ params }: { params: { id: string } }) {
+export default function ClientGallery({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -25,7 +26,7 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
         }
 
         // Use the new owner listing endpoint
-        const res = await fetch(`${apiUrl}/api/events/${params.id}/photos`, { headers });
+        const res = await fetch(`${apiUrl}/api/events/${id}/photos`, { headers });
         if (res.ok) {
           const data = await res.json();
 
@@ -70,10 +71,10 @@ export default function ClientGallery({ params }: { params: { id: string } }) {
     return () => {
         objectUrls.forEach(url => URL.revokeObjectURL(url));
     }
-  }, [params.id]);
+  }, [id]);
 
-  if (loading) return <div className="p-8 text-center">Loading gallery...</div>;
-  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">Loading gallery...</div>;
+  if (error) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400 text-center p-8">{error}</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
