@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     FIREBASE_CREDENTIALS: str = "firebase_credentials.json"
+    FIREBASE_PROJECT_ID: str = "clickworthy-app"
     JWT_SECRET_KEY: str
 
     # OAuth configuration for Google Drive BYOS
