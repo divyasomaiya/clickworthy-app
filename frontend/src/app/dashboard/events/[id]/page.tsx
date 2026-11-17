@@ -297,10 +297,21 @@ function PhotoThumbnail({
   }
 
   return (
-    <img
-      src={src}
-      alt="Uploaded photo"
-      className="aspect-square object-cover rounded-lg"
-    />
+    <div className="relative group rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
+      <img
+        src={src}
+        alt="Uploaded photo"
+        className="aspect-square object-cover w-full h-full"
+      />
+      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <a
+          href={src}
+          download={`photo-${photoId}.jpg`}
+          className="text-xs bg-white text-slate-900 font-medium px-2.5 py-1 rounded shadow hover:bg-slate-100"
+        >
+          Download
+        </a>
+      </div>
+    </div>
   );
 }
