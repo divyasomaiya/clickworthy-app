@@ -168,3 +168,33 @@ This file records chronologically ordered, concise entries for key decisions, qu
   - Backend tests: 14/14 passed (`pytest -o pythonpath=.`).
   - Frontend production build: `npm run build` passed with 0 errors across 8 routes.
   - Branch created: `feat/fix-pwa-service-worker-offline-and-dev-bypass`.
+
+---
+
+### [2026-11-18 23:40] Antigravity — Secure Event-Specific Guest QR Access MVP & Upload Indexing Distinction
+- **Agent**: Antigravity
+- **Actions & Architecture Delivered**:
+  - **Firestore Failure & Upload Status Fix**:
+    - Handled database write errors in `upload.py`: if Firestore metadata saving fails, raises HTTP 500 and cleans up saved files from storage rather than silently returning a false success.
+    - Explicitly distinguished upload success from background facial recognition indexing via `indexing_status: "processing"` (and `completed` / `failed` in Firestore).
+    - Added `delete_file` methods to `StorageProvider`, `LocalStorageProvider`, and `GoogleDriveProvider`.
+  - **Guest Access Token Grants**:
+    - Built `backend/app/api/endpoints/guest.py` issuing short-lived, event-scoped, cryptographically signed JWT grants with real-time Firestore revocation and expiration checks.
+    - Added photographer management endpoints (`/api/events/{id}/guest-access`, `/generate`, `/revoke`).
+  - **Guest Biometric Self-Service & Scoped Search**:
+    - Implemented `GET /api/guest/{event_id}/info` providing public event metadata without exposing private photo collections or photographer identifiers.
+    - Implemented `POST /api/guest/{event_id}/search`: requires explicit biometric consent (`consent: true`), enforces sliding-window rate limiting (10 req/min), verifies 10 MB image limits, and strictly scopes FAISS matches to photos within `event_id` (preventing cross-event data leakage).
+    - Temporary working selfie file is deleted immediately in a `finally:` block (no persistent storage of biometric references).
+    - Implemented `GET /api/guest/{event_id}/photo/{photo_id}` for authorized streaming of matched photos to guests.
+  - **Photographer Event Dashboard QR Portal**:
+    - Updated `dashboard/events/[id]/page.tsx` with a responsive QR Code display (via `qrcode` package), one-click link copying, and instant token revocation / regeneration controls.
+  - **Guest Experience UI (`/guest/[id]`)**:
+    - Added multi-step guest portal:
+      1. Consent screen with privacy terms and required checkbox.
+      2. Camera selfie (live webcam / mobile front camera with Capture, Retake, Use Photo) or device photo upload.
+      3. Scoped results gallery displaying only matched photos with full-resolution downloads and enlargement modal.
+    - Excluded `/guest` and `/guest/*` from Service Worker interception in `sw.js`.
+  - **Verification**:
+    - Backend test suite: **16/16 passed** via `pytest -o pythonpath=.` (including new tests for metadata write failure and guest token lifecycle/security).
+    - Frontend build: **Passed with 0 errors** (`npm run build`) compiling all 9 routes.
+    - Pushed to feature branch `feat/secure-guest-qr-access-mvp`.

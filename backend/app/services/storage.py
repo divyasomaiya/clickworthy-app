@@ -25,6 +25,10 @@ class StorageProvider(ABC):
     def create_folder(self, folder_name: str, owner_id: str = None) -> str:
         pass
 
+    @abstractmethod
+    def delete_file(self, file_id: str, owner_id: str = None) -> bool:
+        pass
+
 class LocalStorageProvider(StorageProvider):
     def __init__(self, base_path: str = None):
         if base_path is None:
@@ -60,6 +64,16 @@ class LocalStorageProvider(StorageProvider):
     def create_folder(self, folder_name: str, owner_id: str = None) -> str:
         os.makedirs(self.base_path, exist_ok=True)
         return f"local_folder_{uuid.uuid4()}"
+
+    def delete_file(self, file_id: str, owner_id: str = None) -> bool:
+        path = self.get_file_path(file_id, owner_id)
+        if path and os.path.exists(path):
+            try:
+                os.remove(path)
+                return True
+            except Exception:
+                return False
+        return False
 
 class GoogleDriveProvider(StorageProvider):
     def _get_credentials(self, owner_id: str) -> Optional[Credentials]:
@@ -143,6 +157,16 @@ class GoogleDriveProvider(StorageProvider):
                 status, done = downloader.next_chunk()
 
         return temp_path
+
+    def delete_file(self, file_id: str, owner_id: str = None) -> bool:
+        service = self._get_service(owner_id)
+        if not service:
+            return False
+        try:
+            service.files().delete(fileId=file_id).execute()
+            return True
+        except Exception:
+            return False
 
 class StorageManager:
     def __init__(self):

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getOrRefreshSession } from "@/lib/auth-session";
+import QRCode from "qrcode";
+import { QrCode, Copy, Check, ExternalLink, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 
 interface UploadFileResult {
   name: string;
@@ -28,6 +30,23 @@ export default function EventDashboard({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loadingEvent, setLoadingEvent] = useState(true);
+
+  // Guest QR Access state
+  const [guestAccess, setGuestAccess] = useState<{
+    enabled: boolean;
+    token: string | null;
+    expires_at: string | null;
+    qrDataUrl: string | null;
+    guestUrl: string | null;
+  }>({
+    enabled: false,
+    token: null,
+    expires_at: null,
+    qrDataUrl: null,
+    guestUrl: null,
+  });
+  const [guestLoading, setGuestLoading] = useState(false);
+  const [guestCopied, setGuestCopied] = useState(false);
 
   const getHeaders = async () => {
     const token = await getOrRefreshSession();
@@ -83,6 +102,35 @@ export default function EventDashboard({
         if (photosRes.ok) {
           setPhotos(await photosRes.json());
         }
+
+        // Fetch guest access status
+        const guestRes = await fetch(`${apiUrl}/api/events/${id}/guest-access`, {
+          headers,
+        });
+        if (guestRes.ok) {
+          const gData = await guestRes.json();
+          if (gData.guest_access_enabled && gData.token) {
+            const guestUrl = `${window.location.origin}/guest/${id}?token=${encodeURIComponent(gData.token)}`;
+            try {
+              const qrDataUrl = await QRCode.toDataURL(guestUrl, { width: 220, margin: 2 });
+              setGuestAccess({
+                enabled: true,
+                token: gData.token,
+                expires_at: gData.expires_at,
+                qrDataUrl,
+                guestUrl,
+              });
+            } catch (qrErr) {
+              setGuestAccess({
+                enabled: true,
+                token: gData.token,
+                expires_at: gData.expires_at,
+                qrDataUrl: null,
+                guestUrl,
+              });
+            }
+          }
+        }
       } catch (e) {
         setError("Failed to load event data. Check backend connectivity.");
       } finally {
@@ -92,6 +140,89 @@ export default function EventDashboard({
     fetchEvent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const handleGenerateGuestAccess = async (hours = 72) => {
+    setGuestLoading(true);
+    setError("");
+    const headers = await getHeaders();
+    if (!headers) return;
+
+    try {
+      const res = await fetch(`${apiUrl}/api/events/${id}/guest-access/generate?duration_hours=${hours}`, {
+        method: "POST",
+        headers,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const guestUrl = `${window.location.origin}/guest/${id}?token=${encodeURIComponent(data.token)}`;
+        let qrDataUrl = null;
+        try {
+          qrDataUrl = await QRCode.toDataURL(guestUrl, { width: 220, margin: 2 });
+        } catch {}
+
+        setGuestAccess({
+          enabled: true,
+          token: data.token,
+          expires_at: data.expires_at,
+          qrDataUrl,
+          guestUrl,
+        });
+        setSuccess("Event-specific Guest QR code and link generated successfully!");
+        setTimeout(() => setSuccess(""), 4000);
+      } else {
+        const err = await res.json().catch(() => null);
+        setError(err?.detail || "Failed to generate guest access.");
+      }
+    } catch {
+      setError("Network error generating guest access.");
+    } finally {
+      setGuestLoading(false);
+    }
+  };
+
+  const handleRevokeGuestAccess = async () => {
+    if (!confirm("Are you sure you want to revoke guest access? All existing QR codes and links for this event will be immediately invalidated.")) {
+      return;
+    }
+    setGuestLoading(true);
+    setError("");
+    const headers = await getHeaders();
+    if (!headers) return;
+
+    try {
+      const res = await fetch(`${apiUrl}/api/events/${id}/guest-access/revoke`, {
+        method: "POST",
+        headers,
+      });
+
+      if (res.ok) {
+        setGuestAccess({
+          enabled: false,
+          token: null,
+          expires_at: null,
+          qrDataUrl: null,
+          guestUrl: null,
+        });
+        setSuccess("Guest access revoked successfully. Previous links and QR codes are now inactive.");
+        setTimeout(() => setSuccess(""), 4000);
+      } else {
+        const err = await res.json().catch(() => null);
+        setError(err?.detail || "Failed to revoke guest access.");
+      }
+    } catch {
+      setError("Network error revoking guest access.");
+    } finally {
+      setGuestLoading(false);
+    }
+  };
+
+  const handleCopyGuestLink = () => {
+    if (!guestAccess.guestUrl) return;
+    navigator.clipboard.writeText(guestAccess.guestUrl);
+    setGuestCopied(true);
+    setTimeout(() => setGuestCopied(false), 3000);
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
@@ -258,6 +389,125 @@ export default function EventDashboard({
           {success}
         </div>
       )}
+
+      {/* Guest QR Access Card */}
+      <div className="mb-8 border border-slate-200 dark:border-slate-800 rounded-xl p-6 bg-white dark:bg-slate-900 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <QrCode className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                Guest QR Access & Self-Service Portal
+              </h2>
+            </div>
+            <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+              Guests can scan this QR code or use the link on their mobile phones to search and find their photos with a selfie. No photographer account is required, and biometric consent is enforced.
+            </p>
+
+            {guestAccess.enabled && guestAccess.guestUrl ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Active Guest Access
+                  </span>
+                  {guestAccess.expires_at && (
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Expires: {new Date(guestAccess.expires_at).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+
+                {/* Guest Link Copy Field */}
+                <div className="flex items-center gap-2 max-w-xl">
+                  <input
+                    type="text"
+                    readOnly
+                    value={guestAccess.guestUrl}
+                    className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 text-slate-800 dark:text-slate-200 truncate select-all"
+                  />
+                  <Button
+                    onClick={handleCopyGuestLink}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs shrink-0 flex items-center gap-1.5"
+                  >
+                    {guestCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" /> Copy Link
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => window.open(guestAccess.guestUrl!, "_blank")}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs shrink-0 flex items-center gap-1.5"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Open
+                  </Button>
+                </div>
+
+                {/* Revoke / Regenerate actions */}
+                <div className="flex items-center gap-3 pt-2">
+                  <Button
+                    onClick={() => handleGenerateGuestAccess(72)}
+                    disabled={guestLoading}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${guestLoading ? "animate-spin" : ""}`} />
+                    Regenerate QR / Refresh Token
+                  </Button>
+                  <Button
+                    onClick={handleRevokeGuestAccess}
+                    disabled={guestLoading}
+                    variant="destructive"
+                    size="sm"
+                    className="text-xs flex items-center gap-1.5"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    Revoke Guest Access
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-lg p-4">
+                <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mb-3">
+                  Guest access is currently disabled or revoked for this event.
+                </p>
+                <Button
+                  onClick={() => handleGenerateGuestAccess(72)}
+                  disabled={guestLoading}
+                  className="text-xs font-semibold"
+                >
+                  <QrCode className="w-4 h-4 mr-1.5" />
+                  {guestLoading ? "Generating QR Code…" : "Enable & Generate Guest QR Code"}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* QR Code Preview */}
+          {guestAccess.enabled && guestAccess.qrDataUrl && (
+            <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={guestAccess.qrDataUrl}
+                alt="Event Guest Access QR Code"
+                className="w-44 h-44 rounded-lg bg-white p-2 shadow-sm"
+              />
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 font-medium">
+                Scan to find event photos
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Upload section */}
       <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-12 text-center mb-8 bg-slate-50/50 dark:bg-slate-900/30">

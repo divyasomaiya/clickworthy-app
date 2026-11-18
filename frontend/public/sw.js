@@ -64,6 +64,8 @@ function isPrivateOrDynamicRoute(pathname) {
     cleanPath.startsWith('/login/') ||
     cleanPath === '/gallery' ||
     cleanPath.startsWith('/gallery/') ||
+    cleanPath === '/guest' ||
+    cleanPath.startsWith('/guest/') ||
     cleanPath.startsWith('/api/')
   );
 }

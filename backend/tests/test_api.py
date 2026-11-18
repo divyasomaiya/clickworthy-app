@@ -434,3 +434,174 @@ def test_search_duo_face_matching_modes():
         assert res_insufficient.status_code == 200
         assert res_insufficient.json()["matches"] == []
         assert "Only 1 face was detected" in res_insufficient.json()["message"]
+
+
+def test_upload_firestore_failure_and_indexing_status():
+    token = get_test_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create test event
+    ev_res = client.post("/api/events/", json={
+        "name": "Metadata Test Event",
+        "client_name": "Client",
+        "date": "2026-11-18",
+        "storage_provider": "local"
+    }, headers=headers)
+    assert ev_res.status_code == 200
+    event_id = ev_res.json()["event_id"]
+
+    dummy_jpeg = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xFF\xDB\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xFF\xC0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xFF\xC4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xFF\xDA\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xFF\xD9"
+
+    # 2. Test successful upload returns indexing_status == "processing"
+    up_res = client.post(
+        "/api/upload/",
+        data={"event_id": event_id},
+        files={"file": ("good.jpg", dummy_jpeg, "image/jpeg")},
+        headers=headers
+    )
+    assert up_res.status_code == 200
+    res_data = up_res.json()
+    assert res_data["status"] == "success"
+    assert res_data["indexing_status"] == "processing"
+    assert "photo_id" in res_data
+
+    # 3. Test that if Firestore metadata write fails, upload returns 500 (not false success)
+    from app.services.firebase import firebase_service
+    db = firebase_service.get_db()
+
+    orig_collection = db.collection
+    def mock_collection(coll_name):
+        if coll_name == "images":
+            class FailingCollection:
+                def document(self, doc_id):
+                    class FailingDoc:
+                        def set(self, data, merge=False):
+                            raise Exception("Firestore write quota exceeded")
+                    return FailingDoc()
+            return FailingCollection()
+        return orig_collection(coll_name)
+
+    with patch.object(db, "collection", side_effect=mock_collection):
+        fail_res = client.post(
+            "/api/upload/",
+            data={"event_id": event_id},
+            files={"file": ("fail_meta.jpg", dummy_jpeg, "image/jpeg")},
+            headers=headers
+        )
+        assert fail_res.status_code == 500
+        assert "Failed to record photo metadata" in fail_res.json()["detail"]
+
+
+def test_guest_qr_access_lifecycle_and_security():
+    token = get_test_token("photographer-uid")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create test event A and event B (different photographer)
+    res_a = client.post("/api/events/", json={
+        "name": "Wedding of Alice & Bob",
+        "client_name": "Alice & Bob",
+        "date": "2026-12-01",
+        "storage_provider": "local"
+    }, headers=headers)
+    event_id_a = res_a.json()["event_id"]
+
+    res_b = client.post("/api/events/", json={
+        "name": "Corporate Gala",
+        "client_name": "Acme Corp",
+        "date": "2026-12-05",
+        "storage_provider": "local"
+    }, headers={"Authorization": f"Bearer {get_test_token('other-photographer')}"})
+    event_id_b = res_b.json()["event_id"]
+
+    # 2. Unauthorized photographer cannot generate access for other's event
+    gen_unauth = client.post(f"/api/events/{event_id_b}/guest-access/generate", headers=headers)
+    assert gen_unauth.status_code == 403
+
+    # 3. Photographer generates guest access for Event A
+    gen_res = client.post(f"/api/events/{event_id_a}/guest-access/generate?duration_hours=48", headers=headers)
+    assert gen_res.status_code == 200
+    guest_token = gen_res.json()["token"]
+    assert guest_token is not None
+
+    # 4. Check guest-access status endpoint
+    status_res = client.get(f"/api/events/{event_id_a}/guest-access", headers=headers)
+    assert status_res.status_code == 200
+    assert status_res.json()["guest_access_enabled"] is True
+    assert status_res.json()["token"] == guest_token
+
+    # 5. Guest accesses event info WITHOUT photographer login
+    info_res = client.get(f"/api/guest/{event_id_a}/info?token={guest_token}")
+    assert info_res.status_code == 200
+    info_data = info_res.json()
+    assert info_data["event_name"] == "Wedding of Alice & Bob"
+    assert info_data["client_name"] == "Alice & Bob"
+    # Ensure photographer UID or full photo collection is NOT leaked
+    assert "photographer_id" not in info_data
+    assert "photos" not in info_data
+
+    # 6. Wrong event token rejection: using Event A's token on Event B
+    wrong_ev_res = client.get(f"/api/guest/{event_id_b}/info?token={guest_token}")
+    assert wrong_ev_res.status_code == 403
+    assert "does not match this event" in wrong_ev_res.json()["detail"]
+
+    # 7. Invalid or tampered token rejection
+    bad_token_res = client.get(f"/api/guest/{event_id_a}/info?token=invalid.jwt.token")
+    assert bad_token_res.status_code == 401
+
+    # 8. Biometric consent requirement
+    dummy_jpeg = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xFF\xDB\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xFF\xC0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xFF\xC4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xFF\xDA\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xFF\xD9"
+
+    no_consent_res = client.post(
+        f"/api/guest/{event_id_a}/search",
+        data={"token": guest_token, "consent": "false"},
+        files={"file": ("selfie.jpg", dummy_jpeg, "image/jpeg")}
+    )
+    assert no_consent_res.status_code == 400
+    assert "Biometric consent is required" in no_consent_res.json()["detail"]
+
+    # 9. Consented search with scoped event matching
+    import numpy as np
+    from app.services.vector_store import faiss_index
+    from app.services.firebase import firebase_service
+    db = firebase_service.get_db()
+
+    vec_guest = np.random.randn(128).astype(np.float32)
+    vec_guest /= np.linalg.norm(vec_guest)
+
+    # Seed an event photo in Event A
+    photo_a_id = "guest_photo_event_a"
+    faiss_index.add_embedding(vec_guest, f"{photo_a_id}_face_0")
+    db.collection("images").document(photo_a_id).set({"event_id": event_id_a, "filename": "Bride.jpg", "drive_file_id": "d_a"})
+    db.collection("faces").document(f"{photo_a_id}_face_0").set({"event_id": event_id_a, "photo_id": photo_a_id})
+
+    # Seed an event photo in Event B with identical embedding (cross-event isolation test)
+    photo_b_id = "guest_photo_event_b"
+    faiss_index.add_embedding(vec_guest, f"{photo_b_id}_face_0")
+    db.collection("images").document(photo_b_id).set({"event_id": event_id_b, "filename": "CEO.jpg", "drive_file_id": "d_b"})
+    db.collection("faces").document(f"{photo_b_id}_face_0").set({"event_id": event_id_b, "photo_id": photo_b_id})
+
+    with patch("app.api.endpoints.guest.face_service.process_image") as mock_face:
+        mock_face.return_value = [{"bbox": [0, 0, 10, 10], "det_score": 0.99, "embedding": vec_guest.tolist()}]
+
+        search_res = client.post(
+            f"/api/guest/{event_id_a}/search",
+            data={"token": guest_token, "consent": "true"},
+            files={"file": ("selfie.jpg", dummy_jpeg, "image/jpeg")}
+        )
+        assert search_res.status_code == 200
+        results = search_res.json()["results"]
+        matched_ids = [r["photo_id"] for r in results]
+        # Must match Photo A (Event A) and NEVER Photo B (Event B)
+        assert photo_a_id in matched_ids
+        assert photo_b_id not in matched_ids
+
+    # 10. Photographer revokes guest access
+    revoke_res = client.post(f"/api/events/{event_id_a}/guest-access/revoke", headers=headers)
+    assert revoke_res.status_code == 200
+    assert revoke_res.json()["guest_access_enabled"] is False
+
+    # 11. Revoked token access rejected immediately
+    revoked_info = client.get(f"/api/guest/{event_id_a}/info?token={guest_token}")
+    assert revoked_info.status_code == 403
+    assert "revoked" in revoked_info.json()["detail"].lower() or "no longer active" in revoked_info.json()["detail"].lower()
+

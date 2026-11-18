@@ -16,9 +16,9 @@ Image.MAX_IMAGE_PIXELS = 150_000_000
 
 def process_and_index_image(file_path: str, event_id: str, photo_id: str):
     """Background task to detect faces and store embeddings in FAISS."""
+    db = firebase_service.get_db()
     try:
         faces = face_service.process_image(file_path)
-        db = firebase_service.get_db()
         for i, face in enumerate(faces):
             face_uid = f"{photo_id}_face_{i}"
             faiss_index.add_embedding(face["embedding"], face_uid)
@@ -29,8 +29,24 @@ def process_and_index_image(file_path: str, event_id: str, photo_id: str):
                     "bbox": face["bbox"],
                     "det_score": face["det_score"]
                 })
+        if db:
+            try:
+                db.collection("images").document(photo_id).update({
+                    "indexing_status": "completed",
+                    "faces_detected": len(faces)
+                })
+            except Exception:
+                pass
     except Exception as e:
         print(f"Background AI indexing warning for photo {photo_id}: {e}")
+        if db:
+            try:
+                db.collection("images").document(photo_id).update({
+                    "indexing_status": "failed",
+                    "indexing_error": str(e)
+                })
+            except Exception:
+                pass
     finally:
         # Guarantee cleanup of temporary working file
         if os.path.exists(file_path):
@@ -169,17 +185,30 @@ async def upload_photos(
                 "drive_file_id": drive_file_id,
                 "storage_provider": storage_provider_name,
                 "filename": filename,
-                "size_bytes": total_bytes
+                "size_bytes": total_bytes,
+                "indexing_status": "processing",
+                "faces_detected": 0
             })
         except Exception as db_err:
-            print(f"Warning: Failed to write image record to Firestore: {db_err}")
+            try:
+                storage_provider.delete_file(drive_file_id, owner_id=current_user.get("uid"))
+            except Exception:
+                pass
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to record photo metadata in database: {db_err}"
+            )
 
     # 8. Trigger background AI face indexing on the temp file (process_and_index_image cleans it up)
     background_tasks.add_task(process_and_index_image, temp_path, event_id, photo_id)
 
     return {
-        "message": "Upload successful",
+        "status": "success",
+        "message": "Upload successful. Photo stored and queued for AI indexing.",
         "photo_id": photo_id,
         "drive_file_id": drive_file_id,
-        "size_bytes": total_bytes
+        "size_bytes": total_bytes,
+        "indexing_status": "processing"
     }

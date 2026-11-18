@@ -14,8 +14,9 @@ This document records the exact state of the project, verified commits, active b
 | **Dashboard Repairs Branch** | `feat/dashboard-repairs` (Commit SHA: `be03edd`) |
 | **DSLR Photo Upload Branch** | `feat/fix-dslr-photo-uploads` (Commit SHA: `fd1e35d`) |
 | **Camera & Duo Search Branch** | `feat/camera-duo-search-and-session-persistence` (Commit SHA: `2981b55`) |
-| **Service Worker & PWA Offline Fix Branch** | `feat/fix-pwa-service-worker-offline-and-dev-bypass` (Current active feature branch) |
-| **Active PR Target** | `feat/camera-duo-search-and-session-persistence` |
+| **Service Worker & PWA Offline Fix Branch** | `feat/fix-pwa-service-worker-offline-and-dev-bypass` (Commit SHA: `af1056f`) |
+| **Guest QR Access MVP Branch** | `feat/secure-guest-qr-access-mvp` (Current active feature branch) |
+| **Active PR Target** | `feat/fix-pwa-service-worker-offline-and-dev-bypass` |
 
 ---
 
@@ -87,18 +88,32 @@ This document records the exact state of the project, verified commits, active b
 
 ## 4. Test Verification Status
 
+### Real-World Human User Verification (2026-11-18)
+| User-Tested Feature | Result | Verification Notes |
+| :--- | :--- | :--- |
+| **Dashboard loads** | **PASS** | Successfully opens and displays events without errors |
+| **Refresh keeps Google login** | **PASS** | Reloading page preserves Firebase auth and backend session |
+| **Second tab keeps login** | **PASS** | Opening new tab directly recovers session without login prompts |
+| **Gallery photos display** | **PASS** | Photo grid renders images reliably with thumbnails |
+| **Laptop webcam capture** | **PASS** | Live preview, Capture, Retake, and Use Photo verified working |
+| **Single-person selfie search** | **PASS** | Face search matches event photos accurately via YuNet + SFace |
+| **Two-person / Duo search** | **NOT TESTED** | Implemented & verified via unit tests; pending human real-world test |
+
+### Automated Automated & Platform Tests
 | Scope | Test | Result | Notes |
 | :--- | :--- | :--- | :--- |
-| Backend | `pytest` test suite | **PASSED** (14/14) | AI integration, core endpoints & duo search verified |
+| Backend | `pytest` test suite | **PASSED** (16/16) | AI integration, core endpoints, duo search, upload error handling & guest QR access |
 | Backend | `/health` check | **PASSED** | Returns `{"status": "healthy"}` |
 | Backend | `/docs` Swagger check | **PASSED** | HTTP 200 OK |
 | Backend | API Endpoint Verification Suite | **PASSED** (12/12) | Auth, events, photos, uploads, downloads verified |
 | Backend & AI | DSLR & Batch Upload Verification | **PASSED** (9/9) | WhatsApp (<1MB), DSLR (35MB), 5-image batch, 413 rejection, download parity |
 | Backend & AI | Duo Face Search API (Together & Either) | **PASSED** | Single-photo (>=2 faces) and dual-photo duo search, distinct face constraint |
-| Frontend | `npm run build` | **PASSED** | 0 TypeScript or lint errors, dynamic routes & camera modal compiled |
+| Backend & AI | Guest QR Access Lifecycle & Security Suite | **PASSED** | Token generation, wrong event rejection, expired/revoked check, consent gate, scoped FAISS search |
+| Backend | Upload Firestore Failure Detection | **PASSED** | Rejects 500 on metadata failure, returns indexing_status "processing" |
+| Frontend | `npm run build` | **PASSED** | 0 TypeScript or lint errors, all 9 routes (including `/guest/[id]`) compiled |
 | Frontend | Session Persistence across refresh/tab | **PASSED** | Silent `authStateReady()` token recovery without Google popup |
 | Frontend & PWA | Localhost Service Worker Dev Bypass | **PASSED** | Unregistered and bypassed on localhost, prevents false offline fallback |
-| Frontend & PWA | Production Private Route Exclusions | **PASSED** | `/login`, `/dashboard`, `/dashboard/*`, `/gallery`, `/gallery/*`, `/api/*` excluded |
+| Frontend & PWA | Production Private Route Exclusions | **PASSED** | `/login`, `/dashboard`, `/dashboard/*`, `/gallery`, `/gallery/*`, `/guest`, `/guest/*`, `/api/*` excluded |
 | Frontend | Visual UI Navigation & Auth Redirect | **PASSED** | Inspected via visual browser subagent |
 | Security | JWT Secret Key Rotation | **PASSED** | Rotated locally without stdout or chat exposure |
 | Security | Credentials Git Exclusion | **PASSED** | `backend/.env`, `firebase_credentials.json`, `frontend/.env.local` strictly untracked |
@@ -107,6 +122,6 @@ This document records the exact state of the project, verified commits, active b
 
 ## 5. Next Immediate Action
 
-1. Commit and push the verified Service Worker dev bypass and offline exclusions to `feat/fix-pwa-service-worker-offline-and-dev-bypass`.
-2. Open Pull Request on GitHub against `feat/camera-duo-search-and-session-persistence`.
+1. Review and test Guest QR Access workflow in real browser (`/dashboard/events/[id]` -> Copy Link / Scan QR -> `/guest/[id]?token=...`).
+2. Human real-world test for Two-person / Duo search mode.
 3. Proceed to staging deployment planning (Vercel for frontend, Render/Cloud Run for FastAPI backend).
