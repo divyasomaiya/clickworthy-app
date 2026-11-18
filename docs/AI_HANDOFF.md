@@ -13,8 +13,9 @@ This document records the exact state of the project, verified commits, active b
 | **Authentication Fixes Branch** | `feat/auth-verification-and-next16-fixes` (Commit SHA: `108137d`) |
 | **Dashboard Repairs Branch** | `feat/dashboard-repairs` (Commit SHA: `be03edd`) |
 | **DSLR Photo Upload Branch** | `feat/fix-dslr-photo-uploads` (Commit SHA: `fd1e35d`) |
-| **Camera & Duo Search Branch** | `feat/camera-duo-search-and-session-persistence` (Current active feature branch) |
-| **Active PR Target** | `feat/fix-dslr-photo-uploads` |
+| **Camera & Duo Search Branch** | `feat/camera-duo-search-and-session-persistence` (Commit SHA: `2981b55`) |
+| **Service Worker & PWA Offline Fix Branch** | `feat/fix-pwa-service-worker-offline-and-dev-bypass` (Current active feature branch) |
+| **Active PR Target** | `feat/camera-duo-search-and-session-persistence` |
 
 ---
 
@@ -96,6 +97,8 @@ This document records the exact state of the project, verified commits, active b
 | Backend & AI | Duo Face Search API (Together & Either) | **PASSED** | Single-photo (>=2 faces) and dual-photo duo search, distinct face constraint |
 | Frontend | `npm run build` | **PASSED** | 0 TypeScript or lint errors, dynamic routes & camera modal compiled |
 | Frontend | Session Persistence across refresh/tab | **PASSED** | Silent `authStateReady()` token recovery without Google popup |
+| Frontend & PWA | Localhost Service Worker Dev Bypass | **PASSED** | Unregistered and bypassed on localhost, prevents false offline fallback |
+| Frontend & PWA | Production Private Route Exclusions | **PASSED** | `/login`, `/dashboard`, `/dashboard/*`, `/gallery`, `/gallery/*`, `/api/*` excluded |
 | Frontend | Visual UI Navigation & Auth Redirect | **PASSED** | Inspected via visual browser subagent |
 | Security | JWT Secret Key Rotation | **PASSED** | Rotated locally without stdout or chat exposure |
 | Security | Credentials Git Exclusion | **PASSED** | `backend/.env`, `firebase_credentials.json`, `frontend/.env.local` strictly untracked |
@@ -104,7 +107,6 @@ This document records the exact state of the project, verified commits, active b
 
 ## 5. Next Immediate Action
 
-1. Commit and push the final verified camera, duo search, and session persistence fixes to `feat/camera-duo-search-and-session-persistence`.
-2. Open Pull Request on GitHub against `feat/fix-dslr-photo-uploads`.
-3. Test live webcam / mobile selfie in actual browser environment.
-4. Proceed to staging deployment planning (Vercel for frontend, Render/Cloud Run for FastAPI backend).
+1. Commit and push the verified Service Worker dev bypass and offline exclusions to `feat/fix-pwa-service-worker-offline-and-dev-bypass`.
+2. Open Pull Request on GitHub against `feat/camera-duo-search-and-session-persistence`.
+3. Proceed to staging deployment planning (Vercel for frontend, Render/Cloud Run for FastAPI backend).

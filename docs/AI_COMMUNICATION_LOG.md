@@ -144,3 +144,27 @@ This file records chronologically ordered, concise entries for key decisions, qu
     - Backend unit tests: 14/14 passed via `pytest -o pythonpath=.` (including new duo face search tests).
     - Frontend production build: `npm run build` completed with 0 errors across all routes.
     - Committed and pushed to `feat/camera-duo-search-and-session-persistence`.
+
+---
+
+### [2026-11-18 20:50] Antigravity — Localhost PWA Service Worker Offline Interception Fix
+- **Agent**: Antigravity
+- **Root Cause Analysis**:
+  - The false "You're Offline" page on `localhost:3000/dashboard` was caused by a combination of two issues:
+    1. **Stopped local dev servers**: The background Next.js and FastAPI processes had stopped following a server host restart, so initial fetch requests to `localhost:3000` failed.
+    2. **Service Worker Interception & Incomplete Route Exclusions**: The PWA service worker (`public/sw.js`) was previously registered on `localhost:3000`. Its dynamic route exclusion only checked `pathname.startsWith('/dashboard/')` with a trailing slash, failing to match the exact `/dashboard` path or `/login`. When navigation fetch failed, `sw.js` intercepted the request and served `/offline.html`.
+- **Key Fixes Applied**:
+  - **Local Development Bypass**:
+    - Updated `frontend/src/app/layout.tsx` to detect localhost/127.0.0.1 and systematically unregister any active service worker registrations and purge window caches.
+    - Updated `frontend/public/sw.js` to detect localhost/loopback, immediately claim clients, delete caches, self-unregister, and bypass all fetch interceptions (`return;`).
+  - **Production Route & Private Asset Exclusions**:
+    - Created `isPrivateOrDynamicRoute()` in `sw.js` normalizing paths without trailing slashes.
+    - Strictly excluded: `/dashboard`, `/dashboard/*`, `/login`, `/login/*`, `/gallery`, `/gallery/*`, and `/api/*` (including private images and uploads).
+    - Bumped cache version to `clickworthy-cache-v2`, automatically evicting legacy caches.
+    - Preserved genuine offline fallback (`/offline.html`) only for public navigation routes (e.g. landing page `/`).
+- **Verification**:
+  - Both servers restarted and verified healthy (`http://127.0.0.1:8000/health` -> 200, `http://localhost:3000/dashboard` -> 200).
+  - Browser subagent verified `http://localhost:3000/dashboard`: directly rendered the Photographer Dashboard, zero offline page occurrences, verified reload persistence.
+  - Backend tests: 14/14 passed (`pytest -o pythonpath=.`).
+  - Frontend production build: `npm run build` passed with 0 errors across 8 routes.
+  - Branch created: `feat/fix-pwa-service-worker-offline-and-dev-bypass`.

@@ -26,9 +26,10 @@ Track project tasks, ownership, and status across AI sessions.
 | **DSLR & Batch Photo Uploads** | 50 MB bounded chunk streaming, YuNet aspect scaling for 45MP images, per-file batch UI, exact original download parity. | Branch `feat/fix-dslr-photo-uploads` | 2026-11-18 |
 | **Backend Unit Tests** | 14/14 passing via `pytest -o pythonpath=.` (including duo face matching). | Verified | 2026-11-18 |
 | **Production Build** | Clean `npm run build` with 8/8 routes compiled. | Verified | 2026-11-18 |
-| **Direct Camera Capture** | Live webcam / mobile camera capture with preview, retake, and track stop in client gallery. | Branch `feat/camera-duo-search-and-session-persistence` | 2026-11-18 |
-| **Two-Person / Duo Face Search** | Duo search supporting both "Together" (distinct faces) and "Either" modes, dual or single reference photo. | Branch `feat/camera-duo-search-and-session-persistence` | 2026-11-18 |
-| **Session Persistence** | Automatic silent session renewal via `authStateReady()` preventing redundant Google login popups on reload/tab open. | Branch `feat/camera-duo-search-and-session-persistence` | 2026-11-18 |
+| **Direct Camera Capture** | Live webcam / mobile camera capture with preview, retake, and track stop in client gallery. | Commit `2981b55` | 2026-11-18 |
+| **Two-Person / Duo Face Search** | Duo search supporting both "Together" (distinct faces) and "Either" modes, dual or single reference photo. | Commit `2981b55` | 2026-11-18 |
+| **Session Persistence** | Automatic silent session renewal via `authStateReady()` preventing redundant Google login popups on reload/tab open. | Commit `2981b55` | 2026-11-18 |
+| **Localhost SW Dev Bypass & Offline Fix** | Safely unregister and bypass service worker on localhost; exclude `/login`, `/dashboard`, `/gallery`, `/api` in production; bump cache to v2. | Branch `feat/fix-pwa-service-worker-offline-and-dev-bypass` | 2026-11-18 |
 
 ---
 
@@ -36,7 +37,7 @@ Track project tasks, ownership, and status across AI sessions.
 
 | Task | Description | Assigned / Notes |
 | :--- | :--- | :--- |
-| **Camera & Duo Search PR** | Pushing verified changes to `feat/camera-duo-search-and-session-persistence` and opening PR against `feat/fix-dslr-photo-uploads`. | Antigravity |
+| **Service Worker & PWA PR** | Pushing verified changes to `feat/fix-pwa-service-worker-offline-and-dev-bypass` and opening PR against `feat/camera-duo-search-and-session-persistence`. | Antigravity |
 
 ---
 
